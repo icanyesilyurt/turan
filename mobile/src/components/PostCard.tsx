@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native'
 import { CommunityPost } from '../types'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
@@ -54,11 +54,15 @@ export default function PostCard({ post, onPress }: Props) {
       disabled={!onPress}
     >
       <View style={styles.header}>
-        <View style={[styles.avatar, { backgroundColor: colors.teal }]}>
-          <Text style={styles.avatarText}>
-            {post.user ? getInitials(post.user.display_name) : '?'}
-          </Text>
-        </View>
+        {post.user?.avatar_url ? (
+          <Image source={{ uri: post.user.avatar_url }} style={styles.avatarImage} />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: colors.teal }]}>
+            <Text style={styles.avatarText}>
+              {post.user ? getInitials(post.user.display_name) : '?'}
+            </Text>
+          </View>
+        )}
         <View style={styles.userInfo}>
           <View style={styles.nameRow}>
             <Text style={[styles.displayName, { color: c.text }]}>{post.user?.display_name}</Text>
@@ -125,6 +129,7 @@ const styles = StyleSheet.create({
   container: { padding: 16, borderBottomWidth: 1 },
   header: { flexDirection: 'row', gap: 12 },
   avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  avatarImage: { width: 44, height: 44, borderRadius: 22, resizeMode: 'cover' },
   avatarText: { color: '#fff', fontWeight: '700', fontSize: 17 },
   userInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

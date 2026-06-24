@@ -103,6 +103,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
   const t = (key: string): string => translations[language]?.[key] || translations.tr[key] || key
 
+  const withCurrentAuthor = (posts: CommunityPost[]) =>
+    posts.map(post =>
+      user && post.user_id === user.id
+        ? { ...post, user }
+        : post
+    )
+
+  const currentOfficialPosts = withCurrentAuthor(official)
+  const currentFollowingPosts = withCurrentAuthor(following)
+  const currentExplorePosts = withCurrentAuthor(explore)
+
   const toggleSavePost = (id: string) => {
     setSavedPostIds(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -111,7 +122,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  const allPosts = [...official, ...following, ...explore]
+  const allPosts = [
+    ...currentOfficialPosts,
+    ...currentFollowingPosts,
+    ...currentExplorePosts,
+  ]
 
   const likeInAll = (id: string, posts: CommunityPost[]) =>
     posts.map(p => p.id === id ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 } : p)
@@ -175,9 +190,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{
       language, setLanguage, theme, setTheme, t,
       user, isLoggedIn: !!user,
-      officialPosts: official,
-      followingPosts: following,
-      explorePosts: explore,
+      officialPosts: currentOfficialPosts,
+      followingPosts: currentFollowingPosts,
+      explorePosts: currentExplorePosts,
       allPosts,
       addPost,
       comments, setComments,

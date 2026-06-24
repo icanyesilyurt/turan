@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image } from 'react-native'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
 import PostCard from '../components/PostCard'
 
@@ -12,6 +13,7 @@ type HomeTab = 'turan' | 'following' | 'explore'
 
 export default function HomeScreen({ navigation, onOpenDrawer }: any) {
   const { t, theme, user, officialPosts, followingPosts, explorePosts } = useApp()
+  const { profile: currentProfile } = useAuth()
   const c = getTheme(theme)
   const [activeTab, setActiveTab] = useState<HomeTab>('turan')
 
@@ -30,11 +32,18 @@ export default function HomeScreen({ navigation, onOpenDrawer }: any) {
       <View style={[styles.header, { backgroundColor: c.bgSecondary, borderBottomColor: c.border }]}>
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={onOpenDrawer}>
-            <View style={[styles.headerAvatar, { backgroundColor: colors.teal }]}>
-              <Text style={styles.headerAvatarText}>
-                {user ? getInitials(user.display_name) : '?'}
-              </Text>
-            </View>
+            {currentProfile?.avatar_url ? (
+              <Image
+                source={{ uri: currentProfile.avatar_url }}
+                style={styles.headerAvatarImage}
+              />
+            ) : (
+              <View style={[styles.headerAvatar, { backgroundColor: colors.teal }]}>
+                <Text style={styles.headerAvatarText}>
+                  {user ? getInitials(user.display_name) : '?'}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: c.text }]}>TURAN</Text>
           <View style={{ width: 32 }} />
@@ -80,6 +89,7 @@ const styles = StyleSheet.create({
   header: { paddingTop: 50, borderBottomWidth: 1 },
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
   headerAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  headerAvatarImage: { width: 32, height: 32, borderRadius: 16, resizeMode: 'cover' },
   headerAvatarText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: 1 },
   tabBar: { flexDirection: 'row' },

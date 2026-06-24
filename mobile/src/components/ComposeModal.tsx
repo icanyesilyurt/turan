@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Modal, KeyboardAvoidingView, Platform, Alert, Dimensions } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
 
 function getInitials(name: string): string {
@@ -16,6 +17,7 @@ interface Props {
 
 export default function ComposeModal({ visible, onClose, initialText }: Props) {
   const { t, theme, user, addPost, addDraft } = useApp()
+  const { profile: currentProfile } = useAuth()
   const c = getTheme(theme)
   const [text, setText] = useState(initialText || '')
   const [mediaUris, setMediaUris] = useState<string[]>([])
@@ -121,9 +123,18 @@ export default function ComposeModal({ visible, onClose, initialText }: Props) {
 
           <View style={styles.body}>
             {user && (
-              <View style={[styles.avatar, { backgroundColor: colors.teal }]}>
-                <Text style={styles.avatarText}>{getInitials(user.display_name)}</Text>
-              </View>
+              currentProfile?.avatar_url ? (
+                <Image
+                  source={{ uri: currentProfile.avatar_url }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: colors.teal }]}>
+                  <Text style={styles.avatarText}>
+                    {getInitials(currentProfile?.display_name ?? user.display_name)}
+                  </Text>
+                </View>
+              )
             )}
             <TextInput
               style={[styles.input, { color: c.text }]}
@@ -214,6 +225,7 @@ const styles = StyleSheet.create({
   publishBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20 },
   body: { flexDirection: 'row', padding: 16, paddingBottom: 8, gap: 12 },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatarImage: { width: 40, height: 40, borderRadius: 20, resizeMode: 'cover' },
   avatarText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   input: { flex: 1, fontSize: 17, lineHeight: 24, minHeight: 70, maxHeight: 120 },
   mediaRow: { flexDirection: 'row', paddingHorizontal: 68, gap: 8, flexWrap: 'wrap' },
