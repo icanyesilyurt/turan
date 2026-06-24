@@ -29,12 +29,17 @@ export default function PostCard({ post, onPress }: Props) {
     theme,
     isLoggedIn,
     savedPostIds,
+    likedPostIds,
+    repostedPostIds,
     toggleLikePost,
     toggleSavePost,
     toggleRepostPost,
   } = useApp()
   const { requireAuth } = useAuth()
   const c = getTheme(theme)
+
+  const isLiked = likedPostIds.includes(post.id)
+  const isReposted = repostedPostIds.includes(post.id)
   const isSaved = savedPostIds.includes(post.id)
 
   const runAuthenticated = (action: () => void) => {
@@ -42,7 +47,6 @@ export default function PostCard({ post, onPress }: Props) {
       requireAuth()
       return
     }
-
     action()
   }
 
@@ -96,8 +100,8 @@ export default function PostCard({ post, onPress }: Props) {
           style={styles.action}
           onPress={() => runAuthenticated(() => toggleLikePost(post.id))}
         >
-          <Text style={{ color: post.is_liked ? colors.red : c.textMuted, fontSize: 13 }}>
-            {post.is_liked ? '❤' : '♡'} {post.likes_count}
+          <Text style={{ color: isLiked ? colors.red : c.textMuted, fontSize: 13 }}>
+            {isLiked ? '❤' : '♡'} {post.likes_count + (isLiked ? 1 : 0)}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -110,7 +114,9 @@ export default function PostCard({ post, onPress }: Props) {
           style={styles.action}
           onPress={() => runAuthenticated(() => toggleRepostPost(post.id))}
         >
-          <Text style={{ color: c.textMuted, fontSize: 13 }}>🔄 {post.reposts_count}</Text>
+          <Text style={{ color: isReposted ? colors.teal : c.textMuted, fontSize: 13 }}>
+            🔄 {post.reposts_count + (isReposted ? 1 : 0)}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.action}

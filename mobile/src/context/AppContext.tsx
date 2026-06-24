@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { AppLanguage, Theme, User, CommunityPost, CommunityComment, Conversation, DirectMessage, AppNotification } from '../types'
+import { AppLanguage, Theme, User, CommunityComment, Conversation, DirectMessage } from '../types'
 import translations from '../i18n/translations'
-import { officialPosts, followingPosts, explorePosts, demoComments, demoConversations, demoMessages } from '../data/demo'
+import { demoConversations, demoMessages } from '../data/demo'
 import { useAuth } from './AuthContext'
 import { getFollowCounts, getUnreadNotificationCount } from '../services/profileService'
 
@@ -20,11 +20,8 @@ interface AppContextType {
   t: (key: string) => string
   user: User | null
   isLoggedIn: boolean
-  officialPosts: CommunityPost[]
-  followingPosts: CommunityPost[]
-  explorePosts: CommunityPost[]
-  allPosts: CommunityPost[]
-  addPost: (text: string) => void
+  postsVersion: number
+  incrementPostsVersion: () => void
   comments: CommunityComment[]
   setComments: React.Dispatch<React.SetStateAction<CommunityComment[]>>
   conversations: Conversation[]
@@ -34,7 +31,9 @@ interface AppContextType {
   refreshUnreadCount: () => void
   savedPostIds: string[]
   toggleSavePost: (id: string) => void
+  likedPostIds: string[]
   toggleLikePost: (id: string) => void
+  repostedPostIds: string[]
   toggleRepostPost: (id: string) => void
   drafts: Draft[]
   addDraft: (text: string) => void
@@ -47,17 +46,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { user: authUser, profile } = useAuth()
   const [language, setLanguageState] = useState<AppLanguage>('tr')
   const [theme, setThemeState] = useState<Theme>('dark')
-  const [official, setOfficial] = useState<CommunityPost[]>(officialPosts)
-  const [following, setFollowing] = useState<CommunityPost[]>(followingPosts)
-  const [explore, setExplore] = useState<CommunityPost[]>(explorePosts)
-  const [comments, setComments] = useState<CommunityComment[]>(demoComments)
+  const [comments, setComments] = useState<CommunityComment[]>([])
   const [conversations] = useState<Conversation[]>(demoConversations)
   const [messages, setMessages] = useState<DirectMessage[]>(demoMessages)
   const [savedPostIds, setSavedPostIds] = useState<string[]>([])
+  const [likedPostIds, setLikedPostIds] = useState<string[]>([])
+  const [repostedPostIds, setRepostedPostIds] = useState<string[]>([])
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [loaded, setLoaded] = useState(false)
   const [followCountsState, setFollowCountsState] = useState({ followers: 0, following: 0 })
   const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+  const [postsVersion, setPostsVersion] = useState(0)
+
+  const incrementPostsVersion = useCallback(() => setPostsVersion(v => v + 1), [])
 
   useEffect(() => {
     if (!profile) {
@@ -103,16 +104,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const [lang, th, sp, dr] = await Promise.all([
+      const [lang, th, sp, dr, lp, rp] = await Promise.all([
         AsyncStorage.getItem('turan_lang'),
         AsyncStorage.getItem('turan_theme'),
         AsyncStorage.getItem('turan_saved_posts'),
         AsyncStorage.getItem('turan_drafts'),
+        AsyncStorage.getItem('turan_liked_posts'),
+        AsyncStorage.getItem('turan_reposted_posts'),
       ])
       if (lang) setLanguageState(lang as AppLanguage)
       if (th) setThemeState(th as Theme)
       if (sp) setSavedPostIds(JSON.parse(sp))
       if (dr) setDrafts(JSON.parse(dr))
+      if (lp) setLikedPostIds(JSON.parse(lp))
+      if (rp) setRepostedPostIds(JSON.parse(rp))
       setLoaded(true)
     })()
   }, [])
@@ -127,17 +132,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
   const t = (key: string): string => translations[language]?.[key] || translations.tr[key] || key
 
-  const withCurrentAuthor = (posts: CommunityPost[]) =>
-    posts.map(post =>
-      user && post.user_id === user.id
-        ? { ...post, user }
-        : post
-    )
-
-  const currentOfficialPosts = withCurrentAuthor(official)
-  const currentFollowingPosts = withCurrentAuthor(following)
-  const currentExplorePosts = withCurrentAuthor(explore)
-
   const toggleSavePost = (id: string) => {
     setSavedPostIds(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -146,49 +140,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  const allPosts = [
-    ...currentOfficialPosts,
-    ...currentFollowingPosts,
-    ...currentExplorePosts,
-  ]
-
-  const likeInAll = (id: string, posts: CommunityPost[]) =>
-    posts.map(p => p.id === id ? { ...p, is_liked: !p.is_liked, likes_count: p.is_liked ? p.likes_count - 1 : p.likes_count + 1 } : p)
-
   const toggleLikePost = (id: string) => {
-    setOfficial(prev => likeInAll(id, prev))
-    setFollowing(prev => likeInAll(id, prev))
-    setExplore(prev => likeInAll(id, prev))
+    setLikedPostIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      AsyncStorage.setItem('turan_liked_posts', JSON.stringify(next))
+      return next
+    })
   }
-
-  const repostInAll = (id: string, posts: CommunityPost[]) =>
-    posts.map(post =>
-      post.id === id
-        ? { ...post, reposts_count: post.reposts_count + 1 }
-        : post
-    )
 
   const toggleRepostPost = (id: string) => {
-    setOfficial(prev => repostInAll(id, prev))
-    setFollowing(prev => repostInAll(id, prev))
-    setExplore(prev => repostInAll(id, prev))
-  }
-
-  const addPost = (text: string) => {
-    if (!user || !text.trim()) return
-    const newPost: CommunityPost = {
-      id: `p${Date.now()}`,
-      user_id: user.id,
-      user,
-      text: text.trim(),
-      likes_count: 0,
-      comments_count: 0,
-      reposts_count: 0,
-      created_at: new Date().toISOString(),
-      is_liked: false,
-      is_saved: false,
-    }
-    setFollowing(prev => [newPost, ...prev])
+    setRepostedPostIds(prev => {
+      const next = prev.includes(id) ? [...prev] : [...prev, id]
+      AsyncStorage.setItem('turan_reposted_posts', JSON.stringify(next))
+      return next
+    })
   }
 
   const addDraft = (text: string) => {
@@ -214,16 +179,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{
       language, setLanguage, theme, setTheme, t,
       user, isLoggedIn: !!user,
-      officialPosts: currentOfficialPosts,
-      followingPosts: currentFollowingPosts,
-      explorePosts: currentExplorePosts,
-      allPosts,
-      addPost,
+      postsVersion, incrementPostsVersion,
       comments, setComments,
       conversations, messages, setMessages,
       unreadNotifCount,
       refreshUnreadCount,
-      savedPostIds, toggleSavePost, toggleLikePost, toggleRepostPost,
+      savedPostIds, toggleSavePost,
+      likedPostIds, toggleLikePost,
+      repostedPostIds, toggleRepostPost,
       drafts, addDraft, removeDraft,
     }}>
       {children}

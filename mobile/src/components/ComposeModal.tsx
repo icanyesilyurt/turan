@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
+import { createPost } from '../services/postService'
 
 function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -16,7 +17,7 @@ interface Props {
 }
 
 export default function ComposeModal({ visible, onClose, initialText }: Props) {
-  const { t, theme, user, addPost, addDraft } = useApp()
+  const { t, theme, user, addDraft, incrementPostsVersion } = useApp()
   const { profile: currentProfile } = useAuth()
   const c = getTheme(theme)
   const [text, setText] = useState(initialText || '')
@@ -25,12 +26,22 @@ export default function ComposeModal({ visible, onClose, initialText }: Props) {
 
   const hasContent = text.trim().length > 0 || mediaUris.length > 0
 
-  const handlePublish = () => {
-    if (!hasContent) return
-    addPost(text)
-    setText('')
-    setMediaUris([])
-    onClose()
+  const [publishing, setPublishing] = useState(false)
+
+  const handlePublish = async () => {
+    if (!hasContent || !currentProfile || publishing) return
+    setPublishing(true)
+    try {
+      await createPost(currentProfile.id, text)
+      incrementPostsVersion()
+      setText('')
+      setMediaUris([])
+      onClose()
+    } catch (err: any) {
+      Alert.alert(t('image_upload_error'), err?.message || String(err))
+    } finally {
+      setPublishing(false)
+    }
   }
 
   const handleClose = () => {

@@ -1,14 +1,29 @@
-import React from 'react'
-import { View, Text, FlatList, StyleSheet } from 'react-native'
+import React, { useState, useEffect } from 'react'
+import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native'
 import { useApp } from '../context/AppContext'
-import { getTheme } from '../styles/theme'
+import { getTheme, colors } from '../styles/theme'
+import { getPostsByIds } from '../services/postService'
+import { CommunityPost } from '../types'
 import PostCard from '../components/PostCard'
 
 export default function SavedScreen({ navigation }: any) {
-  const { t, theme, allPosts = [], savedPostIds = [] } = useApp()
+  const { t, theme, savedPostIds = [] } = useApp()
   const c = getTheme(theme)
+  const [posts, setPosts] = useState<CommunityPost[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const savedPosts = allPosts.filter(x => savedPostIds.includes(x.id))
+  useEffect(() => {
+    if (savedPostIds.length === 0) {
+      setPosts([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    getPostsByIds(savedPostIds)
+      .then(setPosts)
+      .catch(() => setPosts([]))
+      .finally(() => setLoading(false))
+  }, [savedPostIds])
 
   return (
     <View style={[styles.container, { backgroundColor: c.bg }]}>
@@ -16,14 +31,18 @@ export default function SavedScreen({ navigation }: any) {
         <Text style={[styles.headerTitle, { color: c.text }]}>{t('saved_title')}</Text>
       </View>
 
-      {savedPosts.length === 0 ? (
+      {loading ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={colors.teal} />
+        </View>
+      ) : posts.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={{ fontSize: 48, marginBottom: 12 }}>🔖</Text>
           <Text style={{ color: c.textMuted, fontSize: 15 }}>{t('saved_empty')}</Text>
         </View>
       ) : (
         <FlatList
-          data={savedPosts}
+          data={posts}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
             <PostCard

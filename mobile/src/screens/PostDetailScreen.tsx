@@ -1,7 +1,9 @@
-import React, { useState } from 'react'
-import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native'
+import React, { useState, useEffect } from 'react'
+import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native'
 import { useApp } from '../context/AppContext'
 import { colors, getTheme } from '../styles/theme'
+import { getPostById } from '../services/postService'
+import { CommunityPost } from '../types'
 import PostCard from '../components/PostCard'
 
 function getInitials(name: string): string {
@@ -10,12 +12,38 @@ function getInitials(name: string): string {
 
 export default function PostDetailScreen({ route, navigation }: any) {
   const { postId } = route.params
-  const { t, theme, user, isLoggedIn, allPosts = [], comments, setComments } = useApp()
+  const { t, theme, user, isLoggedIn, comments, setComments } = useApp()
   const c = getTheme(theme)
   const [commentText, setCommentText] = useState('')
+  const [post, setPost] = useState<CommunityPost | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const post = allPosts.find(p => p.id === postId)
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    getPostById(postId)
+      .then(data => { if (active) setPost(data) })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [postId])
+
   const postComments = (comments || []).filter(cm => cm.post_id === postId)
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: c.bg }]}>
+        <View style={[styles.header, { backgroundColor: c.bgSecondary, borderBottomColor: c.border }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={{ color: colors.teal, fontSize: 16, fontWeight: '600' }}>← {t('back')}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={colors.teal} />
+        </View>
+      </View>
+    )
+  }
 
   if (!post) {
     return (
@@ -85,7 +113,7 @@ export default function PostDetailScreen({ route, navigation }: any) {
 
           {postComments.length === 0 && (
             <Text style={{ color: c.textMuted, fontSize: 14, textAlign: 'center', padding: 20 }}>
-              {t('no_posts')}
+              {t('no_comments')}
             </Text>
           )}
         </View>

@@ -1,8 +1,10 @@
-import React, { useState } from 'react'
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image } from 'react-native'
+import React, { useState, useEffect, useCallback } from 'react'
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl } from 'react-native'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
+import { getOfficialPosts, getFollowingPosts, getExplorePosts } from '../services/postService'
+import { CommunityPost } from '../types'
 import PostCard from '../components/PostCard'
 
 function getInitials(name: string): string {
@@ -12,20 +14,48 @@ function getInitials(name: string): string {
 type HomeTab = 'turan' | 'following' | 'explore'
 
 export default function HomeScreen({ navigation, onOpenDrawer }: any) {
-  const { t, theme, user, officialPosts, followingPosts, explorePosts } = useApp()
+  const { t, theme, user, postsVersion } = useApp()
   const { profile: currentProfile } = useAuth()
   const c = getTheme(theme)
   const [activeTab, setActiveTab] = useState<HomeTab>('turan')
+  const [posts, setPosts] = useState<CommunityPost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const loadPosts = useCallback(async (showLoader = true) => {
+    if (showLoader) setLoading(true)
+    try {
+      let data: CommunityPost[]
+      if (activeTab === 'turan') {
+        data = await getOfficialPosts()
+      } else if (activeTab === 'following') {
+        if (!currentProfile) { setPosts([]); setLoading(false); return }
+        data = await getFollowingPosts(currentProfile.id)
+      } else {
+        data = await getExplorePosts()
+      }
+      setPosts(data)
+    } catch (err) {
+      console.warn('[HomeScreen] load error:', err)
+      setPosts([])
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [activeTab, currentProfile?.id])
+
+  useEffect(() => { loadPosts() }, [loadPosts, postsVersion])
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true)
+    loadPosts(false)
+  }, [loadPosts])
 
   const tabs: { key: HomeTab; label: string }[] = [
     { key: 'turan', label: t('home_turan') },
     { key: 'following', label: t('home_following') },
     { key: 'explore', label: t('home_explore') },
   ]
-
-  const posts = activeTab === 'turan' ? officialPosts
-    : activeTab === 'following' ? followingPosts
-    : explorePosts
 
   return (
     <View style={[styles.container, { backgroundColor: c.bg }]}>
@@ -68,18 +98,37 @@ export default function HomeScreen({ navigation, onOpenDrawer }: any) {
         </View>
       </View>
 
-      <FlatList
-        data={posts}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <PostCard
-            post={item}
-            onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-          />
-        )}
-        contentContainerStyle={{ paddingBottom: 80 }}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading ? (
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={colors.teal} />
+        </View>
+      ) : (
+        <FlatList
+          data={posts}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
+            <PostCard
+              post={item}
+              onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+            />
+          )}
+          contentContainerStyle={{ paddingBottom: 80 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.teal}
+              colors={[colors.teal]}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={{ color: c.textMuted, fontSize: 15 }}>{t('no_posts')}</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   )
 }
@@ -96,4 +145,6 @@ const styles = StyleSheet.create({
   tabItem: { flex: 1, alignItems: 'center', paddingVertical: 12 },
   tabText: { fontSize: 15, fontWeight: '600' },
   tabIndicator: { position: 'absolute', bottom: 0, width: 40, height: 3, borderRadius: 2, backgroundColor: colors.teal },
+  loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptyState: { alignItems: 'center', padding: 60 },
 })

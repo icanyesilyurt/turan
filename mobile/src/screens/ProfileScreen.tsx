@@ -27,6 +27,7 @@ import {
   getFollowCounts,
   createFollowNotification,
 } from '../services/profileService'
+import { getProfilePosts } from '../services/postService'
 import { Profile, User } from '../types'
 import PostCard from '../components/PostCard'
 import EditProfileModal from '../components/EditProfileModal'
@@ -126,7 +127,7 @@ function PhotoViewerModal({
 }
 
 export default function ProfileScreen({ route, navigation }: any) {
-  const { t, theme, user: currentUser, allPosts = [], comments = [] } = useApp()
+  const { t, theme, user: currentUser, comments = [], postsVersion } = useApp()
   const { profile: currentProfile, requireAuth, refreshProfile } = useAuth()
   const c = getTheme(theme)
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts')
@@ -144,6 +145,7 @@ export default function ProfileScreen({ route, navigation }: any) {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [followListVisible, setFollowListVisible] = useState(false)
   const [followListTab, setFollowListTab] = useState<'following' | 'followers'>('followers')
+  const [userPosts, setUserPosts] = useState<import('../types').CommunityPost[]>([])
 
   const showPermissionAlert = (
     messageKey: 'camera_permission_message' | 'gallery_permission_message',
@@ -344,6 +346,15 @@ export default function ProfileScreen({ route, navigation }: any) {
     return () => { active = false }
   }, [targetProfileId, currentProfile?.id])
 
+  React.useEffect(() => {
+    if (!targetProfileId) return
+    let active = true
+    getProfilePosts(targetProfileId)
+      .then(data => { if (active) setUserPosts(data) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [targetProfileId, postsVersion])
+
   const handleFollowToggle = async () => {
     if (!currentProfile) { requireAuth(); return }
     if (!targetProfileId || followLoading) return
@@ -452,7 +463,6 @@ export default function ProfileScreen({ route, navigation }: any) {
   }
 
   const initials = getInitials(profileUser.display_name)
-  const userPosts = allPosts.filter(p => p.user_id === profileUser.id)
   const userComments = comments.filter(cm => cm.user_id === profileUser.id)
 
   const tabs: { key: ProfileTab; label: string }[] = [
