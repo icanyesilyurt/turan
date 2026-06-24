@@ -21,10 +21,16 @@ import {
   getProfileById,
   uploadAvatar,
   uploadCover,
+  followUser,
+  unfollowUser,
+  isFollowing,
+  getFollowCounts,
+  createFollowNotification,
 } from '../services/profileService'
 import { Profile, User } from '../types'
 import PostCard from '../components/PostCard'
 import EditProfileModal from '../components/EditProfileModal'
+import FollowListModal from '../components/FollowListModal'
 
 function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -132,6 +138,12 @@ export default function ProfileScreen({ route, navigation }: any) {
   const [uploadingTarget, setUploadingTarget] = useState<'avatar' | 'cover' | null>(null)
   const [remoteProfile, setRemoteProfile] = useState<Profile | null>(null)
   const [remoteLoading, setRemoteLoading] = useState(false)
+  const [following, setFollowing] = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
+  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 })
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const [followListVisible, setFollowListVisible] = useState(false)
+  const [followListTab, setFollowListTab] = useState<'following' | 'followers'>('followers')
 
   const showPermissionAlert = (
     messageKey: 'camera_permission_message' | 'gallery_permission_message',
@@ -313,6 +325,58 @@ export default function ProfileScreen({ route, navigation }: any) {
     }
   }, [currentProfile?.id, userId])
 
+  const targetProfileId = userId || currentProfile?.id
+
+  React.useEffect(() => {
+    if (!targetProfileId) return
+    let active = true
+
+    getFollowCounts(targetProfileId)
+      .then(counts => { if (active) setFollowCounts(counts) })
+      .catch(() => {})
+
+    if (currentProfile && targetProfileId !== currentProfile.id) {
+      isFollowing(targetProfileId)
+        .then(val => { if (active) setFollowing(val) })
+        .catch(() => {})
+    }
+
+    return () => { active = false }
+  }, [targetProfileId, currentProfile?.id])
+
+  const handleFollowToggle = async () => {
+    if (!currentProfile) { requireAuth(); return }
+    if (!targetProfileId || followLoading) return
+
+    console.log('[handleFollowToggle] start:', {
+      currentProfileId: currentProfile.id,
+      targetProfileId,
+      currentlyFollowing: following,
+    })
+
+    setFollowLoading(true)
+    try {
+      if (following) {
+        await unfollowUser(targetProfileId)
+        setFollowing(false)
+        setFollowCounts(prev => ({ ...prev, followers: Math.max(0, prev.followers - 1) }))
+      } else {
+        await followUser(targetProfileId)
+        setFollowing(true)
+        setFollowCounts(prev => ({ ...prev, followers: prev.followers + 1 }))
+        createFollowNotification(currentProfile.id, targetProfileId, currentProfile.username)
+      }
+    } catch (err: any) {
+      console.error('[handleFollowToggle] error:', err)
+      Alert.alert(
+        t('image_upload_error'),
+        err?.message || String(err),
+      )
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
   const profileToUser = (profile: Profile): User => ({
     id: profile.id,
     email: profile.id === currentUser?.id ? currentUser.email : '',
@@ -327,8 +391,8 @@ export default function ProfileScreen({ route, navigation }: any) {
     theme,
     membership_status: profile.membership_status,
     created_at: profile.created_at,
-    followers_count: 0,
-    following_count: 0,
+    followers_count: followCounts.followers,
+    following_count: followCounts.following,
   })
 
   const profileUser = userId
@@ -413,13 +477,31 @@ export default function ProfileScreen({ route, navigation }: any) {
         )}
       </TouchableOpacity>
 
-      {navigation.canGoBack() && (
-        <TouchableOpacity style={styles.backBtnAbsolute} onPress={() => navigation.goBack()}>
-          <View style={styles.backCircle}>
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>←</Text>
+      <View style={styles.topBar}>
+        {navigation.canGoBack() && (
+          <TouchableOpacity style={styles.backBtnAbsolute} onPress={() => navigation.goBack()}>
+            <View style={styles.backCircle}>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>←</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+        {!isOwner && (
+          <View style={styles.topRightActions}>
+            <TouchableOpacity
+              style={styles.topActionCircle}
+              onPress={() => Alert.alert(t('coming_soon'))}
+            >
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>?</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.topActionCircle}
+              onPress={() => setMoreMenuOpen(true)}
+            >
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>...</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      )}
+        )}
+      </View>
 
       <View style={[styles.profileInfo, { backgroundColor: c.bg }]}>
         <View style={styles.avatarRow}>
@@ -441,12 +523,24 @@ export default function ProfileScreen({ route, navigation }: any) {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.followBtn, { backgroundColor: colors.teal }]}
-              onPress={() => {
-                if (!currentUser) requireAuth()
-              }}
+              style={[
+                styles.followBtn,
+                {
+                  backgroundColor: following ? 'transparent' : colors.teal,
+                  borderWidth: following ? 1.5 : 0,
+                  borderColor: following ? c.border : undefined,
+                },
+              ]}
+              onPress={handleFollowToggle}
+              disabled={followLoading}
             >
-              <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>{t('follow')}</Text>
+              {followLoading ? (
+                <ActivityIndicator size="small" color={following ? c.text : '#fff'} />
+              ) : (
+                <Text style={{ color: following ? c.text : '#fff', fontWeight: '600', fontSize: 14 }}>
+                  {following ? t('unfollow') : t('follow')}
+                </Text>
+              )}
             </TouchableOpacity>
           )}
         </View>
@@ -465,14 +559,18 @@ export default function ProfileScreen({ route, navigation }: any) {
         )}
 
         <View style={styles.statsRow}>
-          <Text style={{ color: c.text, fontSize: 14, fontWeight: '700' }}>
-            {profileUser.following_count}{' '}
-            <Text style={{ color: c.textMuted, fontWeight: '400' }}>{t('profile_following')}</Text>
-          </Text>
-          <Text style={{ color: c.text, fontSize: 14, fontWeight: '700', marginLeft: 20 }}>
-            {profileUser.followers_count}{' '}
-            <Text style={{ color: c.textMuted, fontWeight: '400' }}>{t('profile_followers')}</Text>
-          </Text>
+          <TouchableOpacity onPress={() => { setFollowListTab('following'); setFollowListVisible(true) }}>
+            <Text style={{ color: c.text, fontSize: 14, fontWeight: '700' }}>
+              {profileUser.following_count}{' '}
+              <Text style={{ color: c.textMuted, fontWeight: '400' }}>{t('profile_following')}</Text>
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { setFollowListTab('followers'); setFollowListVisible(true) }} style={{ marginLeft: 20 }}>
+            <Text style={{ color: c.text, fontSize: 14, fontWeight: '700' }}>
+              {profileUser.followers_count}{' '}
+              <Text style={{ color: c.textMuted, fontWeight: '400' }}>{t('profile_followers')}</Text>
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -606,6 +704,66 @@ export default function ProfileScreen({ route, navigation }: any) {
           onClose={() => setEditModal(false)}
         />
       )}
+
+      {targetProfileId && (
+        <FollowListModal
+          visible={followListVisible}
+          onClose={() => setFollowListVisible(false)}
+          profileId={targetProfileId}
+          initialTab={followListTab}
+          onProfilePress={(uid) => navigation.push('Profile', { userId: uid })}
+        />
+      )}
+
+      <Modal
+        visible={moreMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMoreMenuOpen(false)}
+      >
+        <TouchableOpacity
+          style={pStyles.moreOverlay}
+          activeOpacity={1}
+          onPress={() => setMoreMenuOpen(false)}
+        >
+          <View style={[pStyles.moreSheet, { backgroundColor: c.bgSecondary }]}>
+            {[
+              { key: 'notif_toggle', label: t('menu_notifications') },
+              { key: 'share', label: t('menu_share_profile') },
+              { key: 'block', label: t('menu_block') },
+              { key: 'report', label: t('menu_report') },
+            ].map((item, i, arr) => (
+              <TouchableOpacity
+                key={item.key}
+                style={[
+                  pStyles.moreOption,
+                  i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border },
+                ]}
+                onPress={() => {
+                  setMoreMenuOpen(false)
+                  Alert.alert(t('coming_soon'))
+                }}
+              >
+                <Text
+                  style={{
+                    color: item.key === 'block' || item.key === 'report' ? colors.red : c.text,
+                    fontSize: 16,
+                    fontWeight: '500',
+                  }}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={[pStyles.moreCancel, { backgroundColor: c.bgInput }]}
+              onPress={() => setMoreMenuOpen(false)}
+            >
+              <Text style={{ color: c.textMuted, fontWeight: '600', fontSize: 16 }}>{t('cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   )
 }
@@ -624,6 +782,10 @@ const pStyles = StyleSheet.create({
   modalCoverImg: { width: '100%', height: 180 },
   modalActions: { flexDirection: 'row', justifyContent: 'center', gap: 12, padding: 20 },
   modalBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24 },
+  moreOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  moreSheet: { borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 8, paddingBottom: 16 },
+  moreOption: { paddingVertical: 18, paddingHorizontal: 24 },
+  moreCancel: { marginHorizontal: 16, marginTop: 12, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
 })
 
 const styles = StyleSheet.create({
@@ -631,7 +793,10 @@ const styles = StyleSheet.create({
   coverArea: { height: 165, alignItems: 'center', justifyContent: 'center' },
   coverImage: { width: '100%', height: 165, resizeMode: 'cover' },
   coverChangeBtn: { position: 'absolute', bottom: 10, right: 12, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
-  backBtnAbsolute: { position: 'absolute', top: 48, left: 12, zIndex: 10 },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 48, paddingHorizontal: 12 },
+  topRightActions: { flexDirection: 'row', gap: 8 },
+  topActionCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+  backBtnAbsolute: {},
   backCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
   profileInfo: { paddingHorizontal: 16, paddingBottom: 4 },
   avatarRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: -52 },

@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppLanguage, Theme, User, CommunityPost, CommunityComment, Conversation, DirectMessage, AppNotification } from '../types'
 import translations from '../i18n/translations'
-import { officialPosts, followingPosts, explorePosts, demoComments, demoConversations, demoMessages, demoNotifications } from '../data/demo'
+import { officialPosts, followingPosts, explorePosts, demoComments, demoConversations, demoMessages } from '../data/demo'
 import { useAuth } from './AuthContext'
+import { getFollowCounts, getUnreadNotificationCount } from '../services/profileService'
 
 export interface Draft {
   id: string
@@ -29,8 +30,8 @@ interface AppContextType {
   conversations: Conversation[]
   messages: DirectMessage[]
   setMessages: React.Dispatch<React.SetStateAction<DirectMessage[]>>
-  notifications: AppNotification[]
   unreadNotifCount: number
+  refreshUnreadCount: () => void
   savedPostIds: string[]
   toggleSavePost: (id: string) => void
   toggleLikePost: (id: string) => void
@@ -52,10 +53,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [comments, setComments] = useState<CommunityComment[]>(demoComments)
   const [conversations] = useState<Conversation[]>(demoConversations)
   const [messages, setMessages] = useState<DirectMessage[]>(demoMessages)
-  const [notifs] = useState<AppNotification[]>(demoNotifications)
   const [savedPostIds, setSavedPostIds] = useState<string[]>([])
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [followCountsState, setFollowCountsState] = useState({ followers: 0, following: 0 })
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+
+  useEffect(() => {
+    if (!profile) {
+      setFollowCountsState({ followers: 0, following: 0 })
+      setUnreadNotifCount(0)
+      return
+    }
+    getFollowCounts(profile.id)
+      .then(setFollowCountsState)
+      .catch(() => {})
+    getUnreadNotificationCount(profile.id)
+      .then(setUnreadNotifCount)
+      .catch(() => {})
+  }, [profile?.id])
+
+  const refreshUnreadCount = useCallback(() => {
+    if (profile) {
+      getUnreadNotificationCount(profile.id)
+        .then(setUnreadNotifCount)
+        .catch(() => {})
+    }
+  }, [profile?.id])
 
   const user: User | null = authUser && profile
     ? {
@@ -72,8 +96,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         theme,
         membership_status: profile.membership_status,
         created_at: profile.created_at,
-        followers_count: 0,
-        following_count: 0,
+        followers_count: followCountsState.followers,
+        following_count: followCountsState.following,
       }
     : null
 
@@ -197,8 +221,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addPost,
       comments, setComments,
       conversations, messages, setMessages,
-      notifications: notifs,
-      unreadNotifCount: notifs.filter(n => !n.is_read).length,
+      unreadNotifCount,
+      refreshUnreadCount,
       savedPostIds, toggleSavePost, toggleLikePost, toggleRepostPost,
       drafts, addDraft, removeDraft,
     }}>

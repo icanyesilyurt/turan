@@ -124,12 +124,16 @@ export default function SearchScreen({ navigation }: any) {
     }
   }, [query])
 
+  const { guestMode, requireAuth } = useAuth()
+
   const handleProfilePress = (profile: Profile) => {
+    if (guestMode) { requireAuth(); return }
     addToHistory(profile)
     navigation.navigate('Profile', { userId: profile.id })
   }
 
   const handleHistoryPress = (item: SearchHistoryItem) => {
+    if (guestMode) { requireAuth(); return }
     navigation.navigate('Profile', { userId: item.id })
   }
 

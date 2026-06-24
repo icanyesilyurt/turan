@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image } from 'react-native'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
+import { getFollowCounts } from '../services/profileService'
 
 function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -26,6 +27,14 @@ export default function DrawerMenu({ visible, onClose, onNavigate }: Props) {
   } = useApp()
   const { logout, requireAuth, profile: currentProfile } = useAuth()
   const c = getTheme(theme)
+  const [counts, setCounts] = useState({ followers: 0, following: 0 })
+
+  useEffect(() => {
+    if (!currentProfile) return
+    getFollowCounts(currentProfile.id)
+      .then(setCounts)
+      .catch(() => {})
+  }, [currentProfile?.id, visible])
 
   if (!visible) return null
 
@@ -64,10 +73,10 @@ export default function DrawerMenu({ visible, onClose, onNavigate }: Props) {
               </Text>
               <View style={styles.statsRow}>
                 <Text style={{ color: c.text, fontSize: 14, fontWeight: '600' }}>
-                  {user.following_count} <Text style={{ color: c.textMuted, fontWeight: '400' }}>{t('profile_following')}</Text>
+                  {counts.following} <Text style={{ color: c.textMuted, fontWeight: '400' }}>{t('profile_following')}</Text>
                 </Text>
                 <Text style={{ color: c.text, fontSize: 14, fontWeight: '600', marginLeft: 16 }}>
-                  {user.followers_count} <Text style={{ color: c.textMuted, fontWeight: '400' }}>{t('profile_followers')}</Text>
+                  {counts.followers} <Text style={{ color: c.textMuted, fontWeight: '400' }}>{t('profile_followers')}</Text>
                 </Text>
               </View>
             </TouchableOpacity>
