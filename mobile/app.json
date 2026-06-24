@@ -13,7 +13,12 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.turan.mobile"
+      "bundleIdentifier": "app.turan.mobile",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "TURAN, profil ve kapak fotoğrafı seçebilmeniz için fotoğraf arşivinize erişir.",
+        "NSCameraUsageDescription": "TURAN, profil ve kapak fotoğrafı çekebilmeniz için kameranıza erişir.",
+        "NSPhotoLibraryAddUsageDescription": "TURAN, seçtiğiniz veya çektiğiniz fotoğrafları fotoğraf arşivinize kaydedebilmek için izin ister."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,8 +37,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "TURAN needs access to your photos to share images.",
-          "cameraPermission": "TURAN needs access to your camera to take photos."
+          "photosPermission": "TURAN, profil ve kapak fotoğrafı seçebilmeniz için fotoğraf arşivinize erişir.",
+          "cameraPermission": "TURAN, profil ve kapak fotoğrafı çekebilmeniz için kameranıza erişir.",
+          "microphonePermission": false
         }
       ]
     ]

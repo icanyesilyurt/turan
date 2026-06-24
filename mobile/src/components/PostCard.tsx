@@ -2,6 +2,7 @@ import React from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { CommunityPost } from '../types'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
 
 interface Props {
@@ -24,8 +25,26 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function PostCard({ post, onPress }: Props) {
-  const { t, theme, toggleLikePost, toggleSavePost } = useApp()
+  const {
+    theme,
+    isLoggedIn,
+    savedPostIds,
+    toggleLikePost,
+    toggleSavePost,
+    toggleRepostPost,
+  } = useApp()
+  const { requireAuth } = useAuth()
   const c = getTheme(theme)
+  const isSaved = savedPostIds.includes(post.id)
+
+  const runAuthenticated = (action: () => void) => {
+    if (!isLoggedIn) {
+      requireAuth()
+      return
+    }
+
+    action()
+  }
 
   return (
     <TouchableOpacity
@@ -69,20 +88,32 @@ export default function PostCard({ post, onPress }: Props) {
       )}
 
       <View style={[styles.actions, { borderTopColor: c.border }]}>
-        <TouchableOpacity style={styles.action} onPress={() => toggleLikePost(post.id)}>
+        <TouchableOpacity
+          style={styles.action}
+          onPress={() => runAuthenticated(() => toggleLikePost(post.id))}
+        >
           <Text style={{ color: post.is_liked ? colors.red : c.textMuted, fontSize: 13 }}>
             {post.is_liked ? '❤' : '♡'} {post.likes_count}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.action} onPress={onPress}>
+        <TouchableOpacity
+          style={styles.action}
+          onPress={() => runAuthenticated(() => onPress?.())}
+        >
           <Text style={{ color: c.textMuted, fontSize: 13 }}>💬 {post.comments_count}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.action}>
+        <TouchableOpacity
+          style={styles.action}
+          onPress={() => runAuthenticated(() => toggleRepostPost(post.id))}
+        >
           <Text style={{ color: c.textMuted, fontSize: 13 }}>🔄 {post.reposts_count}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.action} onPress={() => toggleSavePost(post.id)}>
-          <Text style={{ color: post.is_saved ? colors.teal : c.textMuted, fontSize: 13 }}>
-            {post.is_saved ? '🔖' : '☆'}
+        <TouchableOpacity
+          style={styles.action}
+          onPress={() => runAuthenticated(() => toggleSavePost(post.id))}
+        >
+          <Text style={{ color: isSaved ? colors.teal : c.textMuted, fontSize: 13 }}>
+            {isSaved ? '🔖' : '☆'}
           </Text>
         </TouchableOpacity>
       </View>

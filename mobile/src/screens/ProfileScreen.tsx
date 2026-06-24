@@ -1,10 +1,31 @@
 import React, { useState } from 'react'
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Modal, Dimensions, Image } from 'react-native'
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Linking,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
 import { demoUsers } from '../data/demo'
+import {
+  getProfileById,
+  uploadAvatar,
+  uploadCover,
+} from '../services/profileService'
+import { Profile, User } from '../types'
 import PostCard from '../components/PostCard'
+import EditProfileModal from '../components/EditProfileModal'
 
 function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -23,17 +44,33 @@ interface PhotoViewerProps {
   downloadLabel: string
   type: 'avatar' | 'cover'
   imageUri?: string | null
-  onPickCamera: () => void
-  onPickGallery: () => void
+  uploading?: boolean
+  onChangePhoto: () => void
 }
 
-function PhotoViewerModal({ visible, onClose, label, initials, bgColor, isOwner, changeLabel, downloadLabel, type, imageUri, onPickCamera, onPickGallery }: PhotoViewerProps) {
-  const { t, theme } = useApp()
+function PhotoViewerModal({
+  visible,
+  onClose,
+  initials,
+  bgColor,
+  isOwner,
+  changeLabel,
+  downloadLabel,
+  type,
+  imageUri,
+  uploading,
+  onChangePhoto,
+}: PhotoViewerProps) {
+  const { theme } = useApp()
   const c = getTheme(theme)
-  const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={pStyles.modalOverlay}>
         <TouchableOpacity style={pStyles.modalBackdrop} activeOpacity={1} onPress={onClose} />
         <View style={[pStyles.modalContent, { backgroundColor: c.bgSecondary }]}>
@@ -63,9 +100,14 @@ function PhotoViewerModal({ visible, onClose, label, initials, bgColor, isOwner,
             {isOwner && (
               <TouchableOpacity
                 style={[pStyles.modalBtn, { backgroundColor: colors.teal }]}
-                onPress={() => setPickerOpen(true)}
+                onPress={onChangePhoto}
+                disabled={uploading}
               >
-                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>{changeLabel}</Text>
+                {uploading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>{changeLabel}</Text>
+                )}
               </TouchableOpacity>
             )}
             <TouchableOpacity style={[pStyles.modalBtn, { backgroundColor: c.bgInput }]}>
@@ -74,70 +116,227 @@ function PhotoViewerModal({ visible, onClose, label, initials, bgColor, isOwner,
           </View>
         </View>
       </View>
-
-      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
-        <TouchableOpacity style={pStyles.pickerOverlay} activeOpacity={1} onPress={() => setPickerOpen(false)}>
-          <View style={[pStyles.pickerSheet, { backgroundColor: c.bgSecondary }]}>
-            <TouchableOpacity
-              style={[pStyles.pickerOption, { borderBottomColor: c.border }]}
-              onPress={() => { setPickerOpen(false); onPickCamera() }}
-            >
-              <Text style={[pStyles.pickerIcon, { color: c.text }]}>C</Text>
-              <Text style={[pStyles.pickerLabel, { color: c.text }]}>{t('picker_camera')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={pStyles.pickerOption}
-              onPress={() => { setPickerOpen(false); onPickGallery() }}
-            >
-              <Text style={[pStyles.pickerIcon, { color: c.text }]}>G</Text>
-              <Text style={[pStyles.pickerLabel, { color: c.text }]}>{t('picker_gallery')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[pStyles.pickerCancel, { backgroundColor: c.bgInput }]}
-              onPress={() => setPickerOpen(false)}
-            >
-              <Text style={{ color: c.textMuted, fontWeight: '600', fontSize: 16 }}>{t('cancel')}</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </Modal>
   )
 }
 
 export default function ProfileScreen({ route, navigation }: any) {
-  const { t, theme, user: currentUser, allPosts = [], comments = [], loginDemo } = useApp()
+  const { t, theme, user: currentUser, allPosts = [], comments = [] } = useApp()
+  const { profile: currentProfile, requireAuth, refreshProfile } = useAuth()
   const c = getTheme(theme)
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts')
   const [avatarModal, setAvatarModal] = useState(false)
   const [coverModal, setCoverModal] = useState(false)
-  const [avatarUri, setAvatarUri] = useState<string | null>(null)
-  const [coverUri, setCoverUri] = useState<string | null>(null)
+  const [editModal, setEditModal] = useState(false)
+  const [pickerLoading, setPickerLoading] = useState(false)
+  const [selectedPhotoType, setSelectedPhotoType] = useState<'avatar' | 'cover' | null>(null)
+  const [uploadingTarget, setUploadingTarget] = useState<'avatar' | 'cover' | null>(null)
+  const [remoteProfile, setRemoteProfile] = useState<Profile | null>(null)
+
+  const showPermissionAlert = (
+    messageKey: 'camera_permission_message' | 'gallery_permission_message',
+    canAskAgain: boolean,
+  ) => {
+    if (canAskAgain) {
+      Alert.alert(t('permission_required'), t(messageKey))
+      return
+    }
+
+    Alert.alert(
+      t('permission_required'),
+      t(messageKey),
+      [
+        { text: t('permission_cancel'), style: 'cancel' },
+        {
+          text: t('open_settings'),
+          onPress: () => {
+            void Linking.openSettings()
+          },
+        },
+      ],
+    )
+  }
 
   const pickImage = async (source: 'camera' | 'gallery', target: 'avatar' | 'cover') => {
-    if (source === 'camera') {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync()
-      if (status !== 'granted') return
-      const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: true, aspect: target === 'avatar' ? [1, 1] : [16, 9] })
-      if (!result.canceled && result.assets[0]) {
-        if (target === 'avatar') setAvatarUri(result.assets[0].uri)
-        else setCoverUri(result.assets[0].uri)
+    setPickerLoading(true)
+    try {
+      const permission = source === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync(false)
+
+      console.log('[ProfileImagePicker] permission status', {
+        source,
+        status: permission.status,
+        granted: permission.granted,
+        canAskAgain: permission.canAskAgain,
+      })
+
+      if (!permission.granted) {
+        showPermissionAlert(
+          source === 'camera' ? 'camera_permission_message' : 'gallery_permission_message',
+          permission.canAskAgain,
+        )
+        return
       }
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
-      if (status !== 'granted') return
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsEditing: true, aspect: target === 'avatar' ? [1, 1] : [16, 9] })
-      if (!result.canceled && result.assets[0]) {
-        if (target === 'avatar') setAvatarUri(result.assets[0].uri)
-        else setCoverUri(result.assets[0].uri)
+
+      const options: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ['images'],
+        quality: 0.8,
+        base64: true,
+        allowsEditing: target === 'avatar' || Platform.OS === 'android',
+        aspect: target === 'avatar' ? [1, 1] : [3, 1],
       }
+
+      console.log('[ProfileImagePicker] picker çağrılıyor', { source, target })
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options)
+
+      console.log('[ProfileImagePicker] picker sonucu', {
+        source,
+        target,
+        canceled: result.canceled,
+        assetCount: result.canceled ? 0 : result.assets.length,
+        hasBase64: result.canceled ? false : Boolean(result.assets[0]?.base64),
+        mimeType: result.canceled ? undefined : result.assets[0]?.mimeType,
+      })
+
+      if (result.canceled) return
+
+      const asset = result.assets[0]
+      if (!asset?.base64) {
+        throw new Error(t('image_upload_error'))
+      }
+
+      console.log('[ProfileImagePicker] upload başlıyor', {
+        target,
+        mimeType: asset.mimeType ?? 'image/jpeg',
+      })
+      setUploadingTarget(target)
+
+      if (target === 'avatar') {
+        await uploadAvatar(asset.base64, asset.mimeType ?? 'image/jpeg')
+      } else {
+        await uploadCover(asset.base64, asset.mimeType ?? 'image/jpeg')
+      }
+
+      await refreshProfile()
+      setAvatarModal(false)
+      setCoverModal(false)
+      Alert.alert(t('image_upload_success'))
+    } catch (error: any) {
+      console.error('[ProfileImagePicker] akış hatası', error)
+      Alert.alert(t('image_upload_error'), error?.message || t('image_upload_error'))
+    } finally {
+      setAvatarModal(false)
+      setCoverModal(false)
+      setSelectedPhotoType(null)
+      setPickerLoading(false)
+      setUploadingTarget(null)
     }
   }
 
+  const openPhotoSourceMenu = (target: 'avatar' | 'cover') => {
+    setSelectedPhotoType(target)
+    setAvatarModal(false)
+    setCoverModal(false)
+
+    setTimeout(() => {
+      Alert.alert(
+        target === 'avatar' ? t('profile_change_photo') : t('profile_change_cover'),
+        undefined,
+        [
+          {
+            text: t('picker_camera'),
+            onPress: () => {
+              console.log('[ProfileImagePicker] kamera butonuna basıldı')
+              void pickImage('camera', target)
+            },
+          },
+          {
+            text: t('picker_gallery'),
+            onPress: () => {
+              console.log('[ProfileImagePicker] galeri butonuna basıldı')
+              void pickImage('gallery', target)
+            },
+          },
+          {
+            text: t('permission_cancel'),
+            style: 'cancel',
+            onPress: () => {
+              setSelectedPhotoType(null)
+              setPickerLoading(false)
+              setUploadingTarget(null)
+            },
+          },
+        ],
+        {
+          cancelable: true,
+          onDismiss: () => {
+            setSelectedPhotoType(null)
+            setPickerLoading(false)
+            setUploadingTarget(null)
+          },
+        },
+      )
+    }, 500)
+  }
+
   const userId = route?.params?.userId
-  const profileUser = userId ? demoUsers.find(u => u.id === userId) || currentUser : currentUser
-  const isLoggedIn = !!currentUser
-  const isOwner = !userId || userId === currentUser?.id
+
+  React.useEffect(() => {
+    let active = true
+
+    if (!userId || userId === currentProfile?.id || userId.startsWith('u')) {
+      setRemoteProfile(null)
+      return
+    }
+
+    setRemoteProfile(null)
+    getProfileById(userId)
+      .then(profile => {
+        if (active) setRemoteProfile(profile)
+      })
+      .catch(error => {
+        console.warn(
+          'Unable to load profile:',
+          error instanceof Error ? error.message : error,
+        )
+      })
+
+    return () => {
+      active = false
+    }
+  }, [currentProfile?.id, userId])
+
+  const profileToUser = (profile: Profile): User => ({
+    id: profile.id,
+    email: profile.id === currentUser?.id ? currentUser.email : '',
+    display_name: profile.display_name,
+    username: profile.username,
+    country: profile.country ?? '',
+    city: profile.city ?? '',
+    bio: profile.bio,
+    avatar_url: profile.avatar_url ?? '',
+    cover_url: profile.cover_url ?? '',
+    app_language: profile.app_language,
+    theme,
+    membership_status: profile.membership_status,
+    created_at: profile.created_at,
+    followers_count: 0,
+    following_count: 0,
+  })
+
+  const profileUser = userId
+    ? userId === currentProfile?.id && currentProfile
+      ? profileToUser(currentProfile)
+      : remoteProfile
+        ? profileToUser(remoteProfile)
+        : demoUsers.find(user => user.id === userId) || null
+    : currentProfile
+      ? profileToUser(currentProfile)
+      : null
+  const isOwner = !!currentProfile && (!userId || userId === currentProfile.id)
 
   if (!profileUser) {
     return (
@@ -150,7 +349,7 @@ export default function ProfileScreen({ route, navigation }: any) {
           </Text>
           <TouchableOpacity
             style={[styles.authBtn, { backgroundColor: colors.teal }]}
-            onPress={loginDemo}
+            onPress={() => requireAuth()}
           >
             <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>{t('login')}</Text>
           </TouchableOpacity>
@@ -173,8 +372,8 @@ export default function ProfileScreen({ route, navigation }: any) {
   const headerComponent = (
     <View>
       <TouchableOpacity activeOpacity={0.9} onPress={() => setCoverModal(true)}>
-        {coverUri ? (
-          <Image source={{ uri: coverUri }} style={styles.coverImage} />
+        {profileUser.cover_url ? (
+          <Image source={{ uri: profileUser.cover_url }} style={styles.coverImage} />
         ) : (
           <View style={[styles.coverArea, { backgroundColor: colors.tealDark }]} />
         )}
@@ -196,8 +395,8 @@ export default function ProfileScreen({ route, navigation }: any) {
       <View style={[styles.profileInfo, { backgroundColor: c.bg }]}>
         <View style={styles.avatarRow}>
           <TouchableOpacity activeOpacity={0.9} onPress={() => setAvatarModal(true)}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={[styles.avatar, { borderColor: c.bg }]} />
+            {profileUser.avatar_url ? (
+              <Image source={{ uri: profileUser.avatar_url }} style={[styles.avatar, { borderColor: c.bg }]} />
             ) : (
               <View style={[styles.avatar, { backgroundColor: colors.teal, borderColor: c.bg }]}>
                 <Text style={styles.avatarText}>{initials}</Text>
@@ -205,11 +404,19 @@ export default function ProfileScreen({ route, navigation }: any) {
             )}
           </TouchableOpacity>
           {isOwner ? (
-            <TouchableOpacity style={[styles.editBtn, { borderColor: c.border }]}>
+            <TouchableOpacity
+              style={[styles.editBtn, { borderColor: c.border }]}
+              onPress={() => setEditModal(true)}
+            >
               <Text style={{ color: c.text, fontWeight: '600', fontSize: 14 }}>{t('profile_edit')}</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={[styles.followBtn, { backgroundColor: colors.teal }]}>
+            <TouchableOpacity
+              style={[styles.followBtn, { backgroundColor: colors.teal }]}
+              onPress={() => {
+                if (!currentUser) requireAuth()
+              }}
+            >
               <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>{t('follow')}</Text>
             </TouchableOpacity>
           )}
@@ -337,9 +544,12 @@ export default function ProfileScreen({ route, navigation }: any) {
         changeLabel={t('profile_change_photo')}
         downloadLabel={t('photo_download')}
         type="avatar"
-        imageUri={avatarUri}
-        onPickCamera={() => pickImage('camera', 'avatar')}
-        onPickGallery={() => pickImage('gallery', 'avatar')}
+        imageUri={profileUser.avatar_url}
+        uploading={
+          selectedPhotoType === 'avatar'
+          && (pickerLoading || uploadingTarget === 'avatar')
+        }
+        onChangePhoto={() => openPhotoSourceMenu('avatar')}
       />
 
       <PhotoViewerModal
@@ -352,10 +562,21 @@ export default function ProfileScreen({ route, navigation }: any) {
         changeLabel={t('profile_change_cover')}
         downloadLabel={t('photo_download')}
         type="cover"
-        imageUri={coverUri}
-        onPickCamera={() => pickImage('camera', 'cover')}
-        onPickGallery={() => pickImage('gallery', 'cover')}
+        imageUri={profileUser.cover_url}
+        uploading={
+          selectedPhotoType === 'cover'
+          && (pickerLoading || uploadingTarget === 'cover')
+        }
+        onChangePhoto={() => openPhotoSourceMenu('cover')}
       />
+
+      {currentProfile && (
+        <EditProfileModal
+          visible={editModal}
+          profile={currentProfile}
+          onClose={() => setEditModal(false)}
+        />
+      )}
     </View>
   )
 }
@@ -374,25 +595,19 @@ const pStyles = StyleSheet.create({
   modalCoverImg: { width: '100%', height: 180 },
   modalActions: { flexDirection: 'row', justifyContent: 'center', gap: 12, padding: 20 },
   modalBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24 },
-  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  pickerSheet: { borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 8, paddingBottom: 16 },
-  pickerOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 24, borderBottomWidth: 1, gap: 16 },
-  pickerIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(13,148,136,0.15)', textAlign: 'center', lineHeight: 32, fontSize: 15, fontWeight: '700', overflow: 'hidden' },
-  pickerLabel: { fontSize: 17, fontWeight: '500' },
-  pickerCancel: { marginHorizontal: 16, marginTop: 12, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
 })
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  coverArea: { height: 150, alignItems: 'center', justifyContent: 'center' },
-  coverImage: { width: '100%', height: 150 },
+  coverArea: { height: 165, alignItems: 'center', justifyContent: 'center' },
+  coverImage: { width: '100%', height: 165, resizeMode: 'cover' },
   coverChangeBtn: { position: 'absolute', bottom: 10, right: 12, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
   backBtnAbsolute: { position: 'absolute', top: 48, left: 12, zIndex: 10 },
   backCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
   profileInfo: { paddingHorizontal: 16, paddingBottom: 4 },
-  avatarRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: -40 },
-  avatar: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 4 },
-  avatarText: { color: '#fff', fontWeight: '800', fontSize: 30 },
+  avatarRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: -52 },
+  avatar: { width: 104, height: 104, borderRadius: 52, alignItems: 'center', justifyContent: 'center', borderWidth: 4 },
+  avatarText: { color: '#fff', fontWeight: '800', fontSize: 36 },
   editBtn: { borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8, marginBottom: 8 },
   followBtn: { borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8, marginBottom: 8 },
   displayName: { fontSize: 22, fontWeight: '800', marginTop: 8 },

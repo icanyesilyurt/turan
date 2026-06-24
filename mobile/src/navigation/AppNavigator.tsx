@@ -128,8 +128,12 @@ export default function AppNavigator() {
           )}
         </Tab.Screen>
         <Tab.Screen name="SearchTab" component={SearchStack} options={{ tabBarLabel: t('tab_search') }} />
-        <Tab.Screen name="NotificationsTab" component={NotificationsStack} options={{ tabBarLabel: t('tab_notifications') }} />
-        <Tab.Screen name="MessagesTab" component={MessagesStack} options={{ tabBarLabel: t('tab_messages') }} />
+        {isLoggedIn && (
+          <>
+            <Tab.Screen name="NotificationsTab" component={NotificationsStack} options={{ tabBarLabel: t('tab_notifications') }} />
+            <Tab.Screen name="MessagesTab" component={MessagesStack} options={{ tabBarLabel: t('tab_messages') }} />
+          </>
+        )}
       </Tab.Navigator>
 
       {isLoggedIn && (

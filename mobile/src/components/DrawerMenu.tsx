@@ -1,6 +1,7 @@
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image } from 'react-native'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
 
 function getInitials(name: string): string {
@@ -14,7 +15,16 @@ interface Props {
 }
 
 export default function DrawerMenu({ visible, onClose, onNavigate }: Props) {
-  const { t, theme, user, isLoggedIn, drafts, loginDemo, logoutDemo } = useApp()
+  const {
+    t,
+    theme,
+    user,
+    isLoggedIn,
+    drafts,
+    language,
+    setLanguage,
+  } = useApp()
+  const { logout, requireAuth, profile: currentProfile } = useAuth()
   const c = getTheme(theme)
 
   if (!visible) return null
@@ -32,12 +42,26 @@ export default function DrawerMenu({ visible, onClose, onNavigate }: Props) {
       <View style={[styles.drawer, { backgroundColor: c.bgSecondary }]}>
         <View style={[styles.profileSection, { borderBottomColor: c.border }]}>
           {isLoggedIn && user ? (
-            <>
-              <View style={[styles.avatar, { backgroundColor: colors.teal }]}>
-                <Text style={styles.avatarText}>{getInitials(user.display_name)}</Text>
-              </View>
-              <Text style={[styles.displayName, { color: c.text }]}>{user.display_name}</Text>
-              <Text style={{ color: c.textMuted, fontSize: 14 }}>@{user.username}</Text>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => { onNavigate('Profile'); onClose() }}
+            >
+              {currentProfile?.avatar_url ? (
+                <Image
+                  source={{ uri: currentProfile.avatar_url }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: colors.teal }]}>
+                  <Text style={styles.avatarText}>{getInitials(user.display_name)}</Text>
+                </View>
+              )}
+              <Text style={[styles.displayName, { color: c.text }]}>
+                {currentProfile?.display_name ?? user.display_name}
+              </Text>
+              <Text style={{ color: c.textMuted, fontSize: 14 }}>
+                @{currentProfile?.username ?? user.username}
+              </Text>
               <View style={styles.statsRow}>
                 <Text style={{ color: c.text, fontSize: 14, fontWeight: '600' }}>
                   {user.following_count} <Text style={{ color: c.textMuted, fontWeight: '400' }}>{t('profile_following')}</Text>
@@ -46,39 +70,72 @@ export default function DrawerMenu({ visible, onClose, onNavigate }: Props) {
                   {user.followers_count} <Text style={{ color: c.textMuted, fontWeight: '400' }}>{t('profile_followers')}</Text>
                 </Text>
               </View>
-            </>
-          ) : (
-            <TouchableOpacity
-              style={[styles.loginBtn, { backgroundColor: colors.teal }]}
-              onPress={() => { loginDemo(); onClose() }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{t('login')}</Text>
             </TouchableOpacity>
+          ) : (
+            <View style={styles.guestAuth}>
+              <TouchableOpacity
+                style={[styles.loginBtn, { backgroundColor: colors.teal }]}
+                onPress={() => { requireAuth('login'); onClose() }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{t('login')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.registerBtn, { borderColor: colors.teal }]}
+                onPress={() => { requireAuth('register'); onClose() }}
+              >
+                <Text style={{ color: colors.teal, fontWeight: '700', fontSize: 16 }}>{t('register')}</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
-        <View style={styles.menuSection}>
-          {menuItems.map(item => (
-            <TouchableOpacity
-              key={item.key}
-              style={styles.menuItem}
-              onPress={() => { onNavigate(item.key); onClose() }}
-            >
-              <Text style={{ fontSize: 22 }}>{item.icon}</Text>
-              <Text style={[styles.menuLabel, { color: c.text }]}>{item.label}</Text>
-              {item.badge !== undefined && (
-                <View style={styles.menuBadge}>
-                  <Text style={styles.menuBadgeText}>{item.badge}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
+        {isLoggedIn ? (
+          <View style={styles.menuSection}>
+            {menuItems.map(item => (
+              <TouchableOpacity
+                key={item.key}
+                style={styles.menuItem}
+                onPress={() => { onNavigate(item.key); onClose() }}
+              >
+                <Text style={{ fontSize: 22 }}>{item.icon}</Text>
+                <Text style={[styles.menuLabel, { color: c.text }]}>{item.label}</Text>
+                {item.badge !== undefined && (
+                  <View style={styles.menuBadge}>
+                    <Text style={styles.menuBadgeText}>{item.badge}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.guestLanguageSection}>
+            <Text style={[styles.guestSectionTitle, { color: c.textMuted }]}>{t('language')}</Text>
+            <View style={styles.languageGrid}>
+              {(['tr', 'az', 'kk', 'ky', 'uz', 'tk'] as const).map(code => (
+                <TouchableOpacity
+                  key={code}
+                  style={[
+                    styles.languageBtn,
+                    {
+                      borderColor: language === code ? colors.teal : c.border,
+                      backgroundColor: language === code ? colors.tealGlow : c.bgInput,
+                    },
+                  ]}
+                  onPress={() => setLanguage(code)}
+                >
+                  <Text style={{ color: language === code ? colors.teal : c.text, fontWeight: '600' }}>
+                    {code.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
 
         {isLoggedIn && (
           <TouchableOpacity
             style={[styles.logoutBtn, { borderTopColor: c.border }]}
-            onPress={() => { logoutDemo(); onClose() }}
+            onPress={() => { void logout(); onClose() }}
           >
             <Text style={{ fontSize: 22 }}>🚪</Text>
             <Text style={[styles.menuLabel, { color: colors.red }]}>{t('drawer_logout')}</Text>
@@ -97,11 +154,18 @@ const styles = StyleSheet.create({
   drawer: { position: 'absolute', top: 0, left: 0, bottom: 0, width: width * 0.78, paddingTop: 60 },
   profileSection: { padding: 20, borderBottomWidth: 1 },
   avatar: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  avatarImage: { width: 50, height: 50, borderRadius: 25, marginBottom: 12, resizeMode: 'cover' },
   avatarText: { color: '#fff', fontWeight: '700', fontSize: 20 },
   displayName: { fontSize: 18, fontWeight: '700', marginBottom: 2 },
   statsRow: { flexDirection: 'row', marginTop: 12 },
   loginBtn: { paddingVertical: 12, borderRadius: 24, alignItems: 'center' },
+  guestAuth: { gap: 10 },
+  registerBtn: { paddingVertical: 11, borderRadius: 24, alignItems: 'center', borderWidth: 1.5 },
   menuSection: { paddingTop: 8 },
+  guestLanguageSection: { padding: 20 },
+  guestSectionTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', marginBottom: 12 },
+  languageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  languageBtn: { minWidth: 52, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 16, paddingHorizontal: 20 },
   menuLabel: { fontSize: 17, fontWeight: '500', flex: 1 },
   menuBadge: { backgroundColor: colors.teal, minWidth: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },

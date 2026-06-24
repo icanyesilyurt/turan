@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppLanguage, Theme, User, CommunityPost, CommunityComment, Conversation, DirectMessage, AppNotification } from '../types'
 import translations from '../i18n/translations'
-import { demoUser, officialPosts, followingPosts, explorePosts, demoComments, demoConversations, demoMessages, demoNotifications } from '../data/demo'
+import { officialPosts, followingPosts, explorePosts, demoComments, demoConversations, demoMessages, demoNotifications } from '../data/demo'
+import { useAuth } from './AuthContext'
 
 export interface Draft {
   id: string
@@ -17,7 +18,6 @@ interface AppContextType {
   setTheme: (theme: Theme) => void
   t: (key: string) => string
   user: User | null
-  setUser: (user: User | null) => void
   isLoggedIn: boolean
   officialPosts: CommunityPost[]
   followingPosts: CommunityPost[]
@@ -34,19 +34,18 @@ interface AppContextType {
   savedPostIds: string[]
   toggleSavePost: (id: string) => void
   toggleLikePost: (id: string) => void
+  toggleRepostPost: (id: string) => void
   drafts: Draft[]
   addDraft: (text: string) => void
   removeDraft: (id: string) => void
-  loginDemo: () => void
-  logoutDemo: () => void
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { user: authUser, profile } = useAuth()
   const [language, setLanguageState] = useState<AppLanguage>('tr')
   const [theme, setThemeState] = useState<Theme>('dark')
-  const [user, setUser] = useState<User | null>(null)
   const [official, setOfficial] = useState<CommunityPost[]>(officialPosts)
   const [following, setFollowing] = useState<CommunityPost[]>(followingPosts)
   const [explore, setExplore] = useState<CommunityPost[]>(explorePosts)
@@ -58,18 +57,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [loaded, setLoaded] = useState(false)
 
+  const user: User | null = authUser && profile
+    ? {
+        id: profile.id,
+        email: authUser.email ?? '',
+        display_name: profile.display_name,
+        username: profile.username,
+        country: profile.country ?? '',
+        city: profile.city ?? '',
+        bio: profile.bio,
+        avatar_url: profile.avatar_url ?? '',
+        cover_url: profile.cover_url ?? '',
+        app_language: profile.app_language,
+        theme,
+        membership_status: profile.membership_status,
+        created_at: profile.created_at,
+        followers_count: 0,
+        following_count: 0,
+      }
+    : null
+
   useEffect(() => {
     (async () => {
-      const [lang, th, usr, sp, dr] = await Promise.all([
+      const [lang, th, sp, dr] = await Promise.all([
         AsyncStorage.getItem('turan_lang'),
         AsyncStorage.getItem('turan_theme'),
-        AsyncStorage.getItem('turan_user'),
         AsyncStorage.getItem('turan_saved_posts'),
         AsyncStorage.getItem('turan_drafts'),
       ])
       if (lang) setLanguageState(lang as AppLanguage)
       if (th) setThemeState(th as Theme)
-      if (usr) setUser(JSON.parse(usr))
       if (sp) setSavedPostIds(JSON.parse(sp))
       if (dr) setDrafts(JSON.parse(dr))
       setLoaded(true)
@@ -103,6 +120,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOfficial(prev => likeInAll(id, prev))
     setFollowing(prev => likeInAll(id, prev))
     setExplore(prev => likeInAll(id, prev))
+  }
+
+  const repostInAll = (id: string, posts: CommunityPost[]) =>
+    posts.map(post =>
+      post.id === id
+        ? { ...post, reposts_count: post.reposts_count + 1 }
+        : post
+    )
+
+  const toggleRepostPost = (id: string) => {
+    setOfficial(prev => repostInAll(id, prev))
+    setFollowing(prev => repostInAll(id, prev))
+    setExplore(prev => repostInAll(id, prev))
   }
 
   const addPost = (text: string) => {
@@ -139,21 +169,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  const loginDemo = () => {
-    setUser(demoUser)
-    AsyncStorage.setItem('turan_user', JSON.stringify(demoUser))
-  }
-  const logoutDemo = () => {
-    setUser(null)
-    AsyncStorage.removeItem('turan_user')
-  }
-
   if (!loaded) return null
 
   return (
     <AppContext.Provider value={{
       language, setLanguage, theme, setTheme, t,
-      user, setUser, isLoggedIn: !!user,
+      user, isLoggedIn: !!user,
       officialPosts: official,
       followingPosts: following,
       explorePosts: explore,
@@ -163,9 +184,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       conversations, messages, setMessages,
       notifications: notifs,
       unreadNotifCount: notifs.filter(n => !n.is_read).length,
-      savedPostIds, toggleSavePost, toggleLikePost,
+      savedPostIds, toggleSavePost, toggleLikePost, toggleRepostPost,
       drafts, addDraft, removeDraft,
-      loginDemo, logoutDemo,
     }}>
       {children}
     </AppContext.Provider>

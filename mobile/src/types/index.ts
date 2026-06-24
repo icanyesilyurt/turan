@@ -11,12 +11,28 @@ export interface User {
   city: string
   bio: string
   avatar_url: string
+  cover_url?: string
   app_language: AppLanguage
   theme: Theme
   membership_status: MembershipStatus
   created_at: string
   followers_count: number
   following_count: number
+}
+
+export interface Profile {
+  id: string
+  username: string
+  display_name: string
+  bio: string
+  country: string | null
+  city: string | null
+  app_language: AppLanguage
+  avatar_url: string | null
+  cover_url: string | null
+  membership_status: MembershipStatus
+  created_at: string
+  updated_at: string
 }
 
 export interface ContentItem {

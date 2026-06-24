@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
 import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
 import PostCard from '../components/PostCard'
 
 export default function CommunityScreen({ navigation }: any) {
   const { t, theme, user, isLoggedIn, followingPosts = [], explorePosts = [], addPost } = useApp()
+  const { requireAuth } = useAuth()
   const c = getTheme(theme)
   const [composing, setComposing] = useState(false)
   const [text, setText] = useState('')
@@ -72,7 +74,7 @@ export default function CommunityScreen({ navigation }: any) {
           </Text>
           <TouchableOpacity
             style={[styles.loginBtn, { backgroundColor: colors.teal }]}
-            onPress={() => navigation.navigate('ProfileTab')}
+            onPress={() => requireAuth()}
           >
             <Text style={{ color: '#fff', fontWeight: '600' }}>{t('login')}</Text>
           </TouchableOpacity>
