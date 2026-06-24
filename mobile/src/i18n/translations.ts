@@ -112,6 +112,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_photos: 'Henuz fotograf yok.',
     no_videos: 'Henuz video yok.',
     no_comments: 'Henuz yorum yok.',
+    recent_searches: 'Son Aramalar',
+    clear_all: 'Tumunu Temizle',
+    no_search_history: 'Arama gecmisi yok.',
+    delete: 'Sil',
   },
   az: {
     tab_home: 'Ana Sehife',
@@ -224,6 +228,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_photos: 'Hele sekil yoxdur.',
     no_videos: 'Hele video yoxdur.',
     no_comments: 'Hele serh yoxdur.',
+    recent_searches: 'Son Axtarislar',
+    clear_all: 'Hamisi Temizle',
+    no_search_history: 'Axtaris tarixcesi yoxdur.',
+    delete: 'Sil',
   },
   kk: {
     tab_home: 'Basty bet',
@@ -336,6 +344,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_photos: 'Azirge suret joq.',
     no_videos: 'Azirge beine joq.',
     no_comments: 'Azirge pikir joq.',
+    recent_searches: 'Songy izdeuler',
+    clear_all: 'Barlyghyn tazalau',
+    no_search_history: 'Izdeu tarikhy joq.',
+    delete: 'Joju',
   },
   ky: {
     tab_home: 'Bashy bet',
@@ -448,6 +460,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_photos: 'Azyryncha surot joq.',
     no_videos: 'Azyryncha beine joq.',
     no_comments: 'Azyryncha pikir joq.',
+    recent_searches: 'Akyrky izdoolor',
+    clear_all: 'Baardyghyn tazalloo',
+    no_search_history: 'Izdoo tarykhy joq.',
+    delete: 'Ochuruu',
   },
   uz: {
     tab_home: 'Bosh sahifa',
@@ -560,6 +576,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_photos: 'Hozircha rasm yoq.',
     no_videos: 'Hozircha video yoq.',
     no_comments: 'Hozircha izoh yoq.',
+    recent_searches: 'Oxirgi qidiruvlar',
+    clear_all: 'Hammasini tozalash',
+    no_search_history: 'Qidiruv tarixi yoq.',
+    delete: "O'chirish",
   },
   tk: {
     tab_home: 'Bash sahypa',
@@ -672,6 +692,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_photos: 'Entek surat yok.',
     no_videos: 'Entek wideo yok.',
     no_comments: 'Entek teswir yok.',
+    recent_searches: 'Sonky gozlegler',
+    clear_all: 'Hemmesini arassala',
+    no_search_history: 'Gozleg tarykhy yok.',
+    delete: 'Poz',
   },
 }
 

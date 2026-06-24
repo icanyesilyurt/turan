@@ -17,7 +17,6 @@ import * as ImagePicker from 'expo-image-picker'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
-import { demoUsers } from '../data/demo'
 import {
   getProfileById,
   uploadAvatar,
@@ -132,6 +131,7 @@ export default function ProfileScreen({ route, navigation }: any) {
   const [selectedPhotoType, setSelectedPhotoType] = useState<'avatar' | 'cover' | null>(null)
   const [uploadingTarget, setUploadingTarget] = useState<'avatar' | 'cover' | null>(null)
   const [remoteProfile, setRemoteProfile] = useState<Profile | null>(null)
+  const [remoteLoading, setRemoteLoading] = useState(false)
 
   const showPermissionAlert = (
     messageKey: 'camera_permission_message' | 'gallery_permission_message',
@@ -287,12 +287,13 @@ export default function ProfileScreen({ route, navigation }: any) {
   React.useEffect(() => {
     let active = true
 
-    if (!userId || userId === currentProfile?.id || userId.startsWith('u')) {
+    if (!userId || userId === currentProfile?.id) {
       setRemoteProfile(null)
       return
     }
 
     setRemoteProfile(null)
+    setRemoteLoading(true)
     getProfileById(userId)
       .then(profile => {
         if (active) setRemoteProfile(profile)
@@ -302,6 +303,9 @@ export default function ProfileScreen({ route, navigation }: any) {
           'Unable to load profile:',
           error instanceof Error ? error.message : error,
         )
+      })
+      .finally(() => {
+        if (active) setRemoteLoading(false)
       })
 
     return () => {
@@ -332,17 +336,42 @@ export default function ProfileScreen({ route, navigation }: any) {
       ? profileToUser(currentProfile)
       : remoteProfile
         ? profileToUser(remoteProfile)
-        : demoUsers.find(user => user.id === userId) || null
+        : null
     : currentProfile
       ? profileToUser(currentProfile)
       : null
   const isOwner = !!currentProfile && (!userId || userId === currentProfile.id)
 
-  if (!profileUser) {
+  if (remoteLoading) {
     return (
       <View style={[styles.container, { backgroundColor: c.bg }]}>
         <View style={styles.emptyState}>
-          <Text style={{ fontSize: 56, marginBottom: 16 }}>🏔</Text>
+          <ActivityIndicator size="large" color={colors.teal} />
+        </View>
+      </View>
+    )
+  }
+
+  if (!profileUser) {
+    if (userId) {
+      return (
+        <View style={[styles.container, { backgroundColor: c.bg }]}>
+          {navigation.canGoBack() && (
+            <TouchableOpacity style={styles.backBtnAbsolute} onPress={() => navigation.goBack()}>
+              <View style={styles.backCircle}>
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>←</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          <View style={styles.emptyState}>
+            <Text style={{ color: c.textMuted, fontSize: 15 }}>{t('no_content')}</Text>
+          </View>
+        </View>
+      )
+    }
+    return (
+      <View style={[styles.container, { backgroundColor: c.bg }]}>
+        <View style={styles.emptyState}>
           <Text style={[styles.welcomeTitle, { color: c.text }]}>{t('welcome')}</Text>
           <Text style={{ color: c.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 24 }}>
             {t('upgrade_prompt')}

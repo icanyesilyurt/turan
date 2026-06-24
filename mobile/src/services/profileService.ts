@@ -51,6 +51,22 @@ export async function getProfileByUsername(username: string): Promise<Profile | 
   return data as Profile | null
 }
 
+export async function searchProfiles(query: string, limit = 20): Promise<Profile[]> {
+  const trimmed = query.trim()
+  if (trimmed.length < 2) return []
+
+  const pattern = `%${trimmed}%`
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
+    .order('display_name')
+    .limit(limit)
+
+  if (error) throw error
+  return (data as Profile[]) ?? []
+}
+
 export async function updateMyProfile(updates: ProfileUpdates): Promise<Profile> {
   const {
     data: { user },
