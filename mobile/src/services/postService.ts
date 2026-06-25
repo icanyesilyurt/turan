@@ -34,6 +34,7 @@ function mapRow(row: any): CommunityPost {
     created_at: row.created_at,
     is_liked: false,
     is_saved: false,
+    pinned_at: row.pinned_at ?? null,
   }
 }
 
@@ -221,14 +222,19 @@ export async function getProfileFeed(
   entries.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime())
 
   const seen = new Set<string>()
-  const deduped: CommunityPost[] = []
+  const pinned: CommunityPost[] = []
+  const regular: CommunityPost[] = []
   for (const entry of entries) {
     if (!seen.has(entry.post.id)) {
       seen.add(entry.post.id)
-      deduped.push(entry.post)
+      if (entry.post.pinned_at && !entry.post.reposted_by) {
+        pinned.push(entry.post)
+      } else {
+        regular.push(entry.post)
+      }
     }
   }
-  return deduped.slice(0, limit)
+  return [...pinned, ...regular].slice(0, limit)
 }
 
 export async function getPostById(
@@ -257,4 +263,41 @@ export async function getPostsByIds(
 
   if (error) throw error
   return (data ?? []).map(mapRow)
+}
+
+export async function deletePost(postId: string): Promise<void> {
+  const { error } = await supabase
+    .from('posts')
+    .delete()
+    .eq('id', postId)
+
+  if (error) throw error
+}
+
+export async function pinPost(postId: string, userId: string): Promise<void> {
+  const { error: unpinErr } = await supabase
+    .from('posts')
+    .update({ pinned_at: null })
+    .eq('user_id', userId)
+    .not('pinned_at', 'is', null)
+
+  if (unpinErr) throw unpinErr
+
+  const { error } = await supabase
+    .from('posts')
+    .update({ pinned_at: new Date().toISOString() })
+    .eq('id', postId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+}
+
+export async function unpinPost(postId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('posts')
+    .update({ pinned_at: null })
+    .eq('id', postId)
+    .eq('user_id', userId)
+
+  if (error) throw error
 }

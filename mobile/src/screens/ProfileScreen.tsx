@@ -652,6 +652,8 @@ export default function ProfileScreen({ route, navigation }: any) {
               <PostCard
                 post={item}
                 onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+                onDeleted={() => {}}
+                onProfilePress={(uid) => navigation.push('Profile', { userId: uid })}
               />
             )
           }

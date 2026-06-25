@@ -48,6 +48,7 @@ export default function SavedScreen({ navigation }: any) {
             <PostCard
               post={item}
               onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+              onProfilePress={(userId) => navigation.navigate('Profile', { userId })}
             />
           )}
           contentContainerStyle={{ paddingBottom: 20 }}

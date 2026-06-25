@@ -4,10 +4,14 @@ import { CommunityPost } from '../types'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
+import { deletePost, pinPost, unpinPost } from '../services/postService'
+import { isFollowing, followUser, unfollowUser, createFollowNotification } from '../services/profileService'
 
 interface Props {
   post: CommunityPost
   onPress?: () => void
+  onDeleted?: () => void
+  onProfilePress?: (userId: string) => void
 }
 
 function getInitials(name: string): string {
@@ -24,7 +28,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d`
 }
 
-export default function PostCard({ post, onPress }: Props) {
+export default function PostCard({ post, onPress, onDeleted, onProfilePress }: Props) {
   const {
     theme,
     isLoggedIn,
@@ -35,14 +39,17 @@ export default function PostCard({ post, onPress }: Props) {
     toggleSavePost,
     repostPost,
     unrepostPost,
+    incrementPostsVersion,
     t,
   } = useApp()
-  const { requireAuth } = useAuth()
+  const { profile, requireAuth } = useAuth()
   const c = getTheme(theme)
 
   const isLiked = likedPostIds.includes(post.id)
   const isReposted = repostedPostIds.includes(post.id)
   const isSaved = savedPostIds.includes(post.id)
+  const isOwner = !!profile && post.user_id === profile.id
+  const isPinned = !!post.pinned_at
 
   const [likesCount, setLikesCount] = useState(post.likes_count)
   const [repostsCount, setRepostsCount] = useState(post.reposts_count)
@@ -51,6 +58,12 @@ export default function PostCard({ post, onPress }: Props) {
     setLikesCount(post.likes_count)
     setRepostsCount(post.reposts_count)
   }, [post.likes_count, post.reposts_count])
+
+  const handleProfileTap = () => {
+    if (!post.user_id) return
+    if (!isLoggedIn) { requireAuth(); return }
+    onProfilePress?.(post.user_id)
+  }
 
   const handleLike = async () => {
     if (!isLoggedIn) { requireAuth(); return }
@@ -116,6 +129,92 @@ export default function PostCard({ post, onPress }: Props) {
     } catch {}
   }
 
+  const handleMoreMenu = async () => {
+    if (isOwner) {
+      Alert.alert(
+        undefined as any,
+        undefined,
+        [
+          {
+            text: t('post_delete'),
+            style: 'destructive',
+            onPress: () => {
+              Alert.alert(
+                t('post_delete_confirm_title'),
+                t('post_delete_confirm_message'),
+                [
+                  { text: t('cancel'), style: 'cancel' },
+                  {
+                    text: t('post_delete'),
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await deletePost(post.id)
+                        incrementPostsVersion()
+                        onDeleted?.()
+                      } catch {}
+                    },
+                  },
+                ],
+              )
+            },
+          },
+          {
+            text: isPinned ? t('post_unpin') : t('post_pin'),
+            onPress: async () => {
+              try {
+                if (isPinned) {
+                  await unpinPost(post.id, profile!.id)
+                } else {
+                  await pinPost(post.id, profile!.id)
+                }
+                incrementPostsVersion()
+              } catch {}
+            },
+          },
+          { text: t('cancel'), style: 'cancel' },
+        ],
+      )
+    } else {
+      if (!isLoggedIn) {
+        requireAuth()
+        return
+      }
+
+      let following = false
+      try {
+        following = await isFollowing(post.user_id)
+      } catch {}
+
+      Alert.alert(
+        undefined as any,
+        undefined,
+        [
+          {
+            text: following ? t('unfollow') : t('follow'),
+            onPress: async () => {
+              try {
+                if (following) {
+                  await unfollowUser(post.user_id)
+                } else {
+                  await followUser(post.user_id)
+                  if (profile) {
+                    createFollowNotification(profile.id, post.user_id, profile.username).catch(() => {})
+                  }
+                }
+              } catch {}
+            },
+          },
+          {
+            text: t('post_report'),
+            onPress: () => Alert.alert(t('coming_soon')),
+          },
+          { text: t('cancel'), style: 'cancel' },
+        ],
+      )
+    }
+  }
+
   return (
     <TouchableOpacity
       style={[styles.container, { borderBottomColor: c.border }]}
@@ -130,17 +229,26 @@ export default function PostCard({ post, onPress }: Props) {
           </Text>
         </View>
       )}
+      {isPinned && !post.reposted_by && (
+        <View style={styles.repostHeader}>
+          <Text style={{ color: c.textMuted, fontSize: 12 }}>
+            📌 {t('post_pinned')}
+          </Text>
+        </View>
+      )}
       <View style={styles.header}>
-        {post.user?.avatar_url ? (
-          <Image source={{ uri: post.user.avatar_url }} style={styles.avatarImage} />
-        ) : (
-          <View style={[styles.avatar, { backgroundColor: colors.teal }]}>
-            <Text style={styles.avatarText}>
-              {post.user ? getInitials(post.user.display_name) : '?'}
-            </Text>
-          </View>
-        )}
-        <View style={styles.userInfo}>
+        <TouchableOpacity activeOpacity={0.7} onPress={handleProfileTap}>
+          {post.user?.avatar_url ? (
+            <Image source={{ uri: post.user.avatar_url }} style={styles.avatarImage} />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: colors.teal }]}>
+              <Text style={styles.avatarText}>
+                {post.user ? getInitials(post.user.display_name) : '?'}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.userInfo} activeOpacity={0.7} onPress={handleProfileTap}>
           <View style={styles.nameRow}>
             <Text style={[styles.displayName, { color: c.text }]}>{post.user?.display_name}</Text>
             {post.is_official && (
@@ -152,7 +260,10 @@ export default function PostCard({ post, onPress }: Props) {
           <Text style={{ color: c.textMuted, fontSize: 13 }}>
             @{post.user?.username} · {timeAgo(post.created_at)}
           </Text>
-        </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.moreBtn} onPress={handleMoreMenu} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={{ color: c.textMuted, fontSize: 18, fontWeight: '700' }}>···</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={[styles.text, { color: c.text }]}>{post.text}</Text>
@@ -209,6 +320,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   displayName: { fontSize: 15, fontWeight: '600' },
   officialBadge: { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  moreBtn: { paddingHorizontal: 4, paddingVertical: 2, alignSelf: 'flex-start' },
   text: { fontSize: 15, lineHeight: 23, marginTop: 10 },
   quotedPost: { marginTop: 10, borderWidth: 1, borderRadius: 12, padding: 12 },
   actions: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 12, paddingTop: 10, borderTopWidth: 0.5 },

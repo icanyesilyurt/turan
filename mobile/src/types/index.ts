@@ -75,6 +75,7 @@ export interface CommunityPost {
   is_saved?: boolean
   is_official?: boolean
   reposted_by?: { display_name: string; username: string }
+  pinned_at?: string | null
 }
 
 export interface CommunityComment {

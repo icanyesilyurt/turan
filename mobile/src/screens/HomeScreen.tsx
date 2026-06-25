@@ -110,6 +110,7 @@ export default function HomeScreen({ navigation, onOpenDrawer }: any) {
             <PostCard
               post={item}
               onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+              onProfilePress={(userId) => navigation.navigate('Profile', { userId })}
             />
           )}
           contentContainerStyle={{ paddingBottom: 80 }}

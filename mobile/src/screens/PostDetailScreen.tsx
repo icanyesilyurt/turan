@@ -72,7 +72,8 @@ export default function PostDetailScreen({ route, navigation }: any) {
           </TouchableOpacity>
         </View>
         <View style={{ alignItems: 'center', padding: 40 }}>
-          <Text style={{ color: c.textMuted }}>{t('no_posts')}</Text>
+          <Text style={{ fontSize: 40, marginBottom: 12 }}>🗑️</Text>
+          <Text style={{ color: c.textMuted, fontSize: 15, textAlign: 'center' }}>{t('post_deleted_placeholder')}</Text>
         </View>
       </View>
     )
@@ -106,7 +107,11 @@ export default function PostDetailScreen({ route, navigation }: any) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <PostCard post={post} />
+        <PostCard
+          post={post}
+          onDeleted={() => navigation.goBack()}
+          onProfilePress={(userId) => navigation.navigate('Profile', { userId })}
+        />
 
         <View style={styles.commentsSection}>
           <Text style={[styles.commentsTitle, { color: c.text }]}>

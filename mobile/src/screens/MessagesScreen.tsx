@@ -56,9 +56,14 @@ export default function MessagesScreen({ navigation }: any) {
               activeOpacity={0.7}
               onPress={() => navigation.navigate('Chat', { conversation: item })}
             >
-              <View style={[styles.avatar, item.unread_count > 0 && styles.avatarUnread]}>
-                <Text style={styles.avatarText}>{getInitials(item.other_user.display_name)}</Text>
-              </View>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('Profile', { userId: item.other_user.id })}
+              >
+                <View style={[styles.avatar, item.unread_count > 0 && styles.avatarUnread]}>
+                  <Text style={styles.avatarText}>{getInitials(item.other_user.display_name)}</Text>
+                </View>
+              </TouchableOpacity>
               <View style={styles.convContent}>
                 <View style={styles.convTop}>
                   <Text style={[styles.convName, { color: c.text }]}>{item.other_user.display_name}</Text>
