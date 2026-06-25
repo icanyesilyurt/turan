@@ -82,46 +82,58 @@ export default function NotificationsScreen({ navigation }: any) {
         <FlatList
           data={notifications}
           keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[
-                styles.notifItem,
-                { borderBottomColor: c.border },
-                !item.is_read && { backgroundColor: c.bgSecondary },
-              ]}
-              activeOpacity={0.7}
-              onPress={() => {
-                if (item.post_id) navigation.navigate('PostDetail', { postId: item.post_id })
-                else if (item.from_profile) navigation.navigate('Profile', { userId: item.from_profile.id })
-              }}
-            >
-              <View style={styles.avatarWrapper}>
-                {item.from_profile ? (
-                  item.from_profile.avatar_url ? (
-                    <Image source={{ uri: item.from_profile.avatar_url }} style={styles.avatarImg} />
-                  ) : (
-                    <View style={[styles.avatar, { backgroundColor: colors.teal }]}>
-                      <Text style={styles.avatarText}>{getInitials(item.from_profile.display_name)}</Text>
+          renderItem={({ item }) => {
+            const goToProfile = () => {
+              if (item.from_profile) navigation.navigate('Profile', { userId: item.from_profile.id })
+            }
+            const goToContent = () => {
+              if (item.type === 'follow') {
+                goToProfile()
+              } else if (item.post_id) {
+                navigation.navigate('PostDetail', { postId: item.post_id })
+              } else {
+                goToProfile()
+              }
+            }
+
+            return (
+              <View
+                style={[
+                  styles.notifItem,
+                  { borderBottomColor: c.border },
+                  !item.is_read && { backgroundColor: c.bgSecondary },
+                ]}
+              >
+                <TouchableOpacity activeOpacity={0.7} onPress={goToProfile}>
+                  <View style={styles.avatarWrapper}>
+                    {item.from_profile ? (
+                      item.from_profile.avatar_url ? (
+                        <Image source={{ uri: item.from_profile.avatar_url }} style={styles.avatarImg} />
+                      ) : (
+                        <View style={[styles.avatar, { backgroundColor: colors.teal }]}>
+                          <Text style={styles.avatarText}>{getInitials(item.from_profile.display_name)}</Text>
+                        </View>
+                      )
+                    ) : (
+                      <View style={[styles.avatar, { backgroundColor: c.bgInput }]}>
+                        <Text style={{ fontSize: 18 }}>🔔</Text>
+                      </View>
+                    )}
+                    <View style={[styles.typeBadge, { backgroundColor: c.bg, borderColor: c.bg }]}>
+                      <Text style={styles.typeBadgeIcon}>{notifBadgeIcons[item.type] ?? '🔔'}</Text>
                     </View>
-                  )
-                ) : (
-                  <View style={[styles.avatar, { backgroundColor: c.bgInput }]}>
-                    <Text style={{ fontSize: 18 }}>🔔</Text>
                   </View>
-                )}
-                <View style={[styles.typeBadge, { backgroundColor: c.bg, borderColor: c.bg }]}>
-                  <Text style={styles.typeBadgeIcon}>{notifBadgeIcons[item.type] ?? '🔔'}</Text>
-                </View>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.notifContent} activeOpacity={0.7} onPress={goToContent}>
+                  <Text style={[styles.notifBody, { color: c.text }]}>{item.body}</Text>
+                  <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 4 }}>
+                    {timeAgo(item.created_at)}
+                  </Text>
+                </TouchableOpacity>
+                {!item.is_read && <View style={styles.unreadDot} />}
               </View>
-              <View style={styles.notifContent}>
-                <Text style={[styles.notifBody, { color: c.text }]}>{item.body}</Text>
-                <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 4 }}>
-                  {timeAgo(item.created_at)}
-                </Text>
-              </View>
-              {!item.is_read && <View style={styles.unreadDot} />}
-            </TouchableOpacity>
-          )}
+            )
+          }}
           contentContainerStyle={{ paddingBottom: 80 }}
           ListEmptyComponent={
             <View style={styles.emptyState}>

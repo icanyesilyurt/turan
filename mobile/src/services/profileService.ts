@@ -286,6 +286,18 @@ export async function createFollowNotification(
   followingId: string,
   followerUsername: string,
 ): Promise<void> {
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { data: existing } = await supabase
+    .from('notifications')
+    .select('id')
+    .eq('user_id', followingId)
+    .eq('from_user_id', followerId)
+    .eq('type', 'follow')
+    .gte('created_at', twentyFourHoursAgo)
+    .limit(1)
+
+  if (existing && existing.length > 0) return
+
   const { error } = await supabase.from('notifications').insert({
     user_id: followingId,
     type: 'follow',

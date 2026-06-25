@@ -124,6 +124,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_followers: 'Henuz takipci yok.',
     no_following: 'Henuz takip edilen yok.',
     notif_follow: 'seni takip etmeye basladi.',
+    repost_send: 'Yeniden Gonder',
+    repost_undo: 'Yeniden Gonderiyi Geri Al',
+    repost_quote: 'Alintila',
   },
   az: {
     tab_home: 'Ana Sehife',
@@ -248,6 +251,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_followers: 'Hele izleyici yoxdur.',
     no_following: 'Hele izlenen yoxdur.',
     notif_follow: 'sizi izlemeye basladi.',
+    repost_send: 'Yeniden Paylas',
+    repost_undo: 'Yeniden Paylasimi Geri Al',
+    repost_quote: 'Istinad Et',
   },
   kk: {
     tab_home: 'Basty bet',
@@ -372,6 +378,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_followers: 'Azirge jazylyshy joq.',
     no_following: 'Azirge jazylym joq.',
     notif_follow: 'sizge jazylyp bastady.',
+    repost_send: 'Qayta Jiberу',
+    repost_undo: 'Qayta Jiberуdi Qaytaru',
+    repost_quote: 'Dadeleу',
   },
   ky: {
     tab_home: 'Bashy bet',
@@ -496,6 +505,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_followers: 'Azyryncha jazyluchular joq.',
     no_following: 'Azyryncha jazyluu joq.',
     notif_follow: 'sizge jazylyp bastady.',
+    repost_send: 'Qayta Jiberuu',
+    repost_undo: 'Qayta Jiberuunu Qaytaruu',
+    repost_quote: 'Tsitataloo',
   },
   uz: {
     tab_home: 'Bosh sahifa',
@@ -620,6 +632,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_followers: "Hozircha kuzatuvchi yoq.",
     no_following: "Hozircha kuzatilgan yoq.",
     notif_follow: "sizni kuzatishni boshladi.",
+    repost_send: "Qayta yuborish",
+    repost_undo: "Qayta yuborishni bekor qilish",
+    repost_quote: "Iqtibos",
   },
   tk: {
     tab_home: 'Bash sahypa',
@@ -744,6 +759,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     no_followers: 'Entek yzarlaycy yok.',
     no_following: 'Entek yzarlanan yok.',
     notif_follow: 'sizi yzarlamaga baslady.',
+    repost_send: 'Gaytadan Iber',
+    repost_undo: 'Gaytadan Iberileni Yzyna Al',
+    repost_quote: 'Sitata Getir',
   },
 }
 

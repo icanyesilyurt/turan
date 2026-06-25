@@ -27,8 +27,9 @@ import {
   getFollowCounts,
   createFollowNotification,
 } from '../services/profileService'
-import { getProfilePosts } from '../services/postService'
-import { Profile, User } from '../types'
+import { getProfileFeed } from '../services/postService'
+import { getUserComments } from '../services/interactionService'
+import { Profile, User, CommunityComment } from '../types'
 import PostCard from '../components/PostCard'
 import EditProfileModal from '../components/EditProfileModal'
 import FollowListModal from '../components/FollowListModal'
@@ -127,7 +128,7 @@ function PhotoViewerModal({
 }
 
 export default function ProfileScreen({ route, navigation }: any) {
-  const { t, theme, user: currentUser, comments = [], postsVersion } = useApp()
+  const { t, theme, user: currentUser, postsVersion } = useApp()
   const { profile: currentProfile, requireAuth, refreshProfile } = useAuth()
   const c = getTheme(theme)
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts')
@@ -146,6 +147,7 @@ export default function ProfileScreen({ route, navigation }: any) {
   const [followListVisible, setFollowListVisible] = useState(false)
   const [followListTab, setFollowListTab] = useState<'following' | 'followers'>('followers')
   const [userPosts, setUserPosts] = useState<import('../types').CommunityPost[]>([])
+  const [userComments, setUserComments] = useState<CommunityComment[]>([])
 
   const showPermissionAlert = (
     messageKey: 'camera_permission_message' | 'gallery_permission_message',
@@ -349,8 +351,11 @@ export default function ProfileScreen({ route, navigation }: any) {
   React.useEffect(() => {
     if (!targetProfileId) return
     let active = true
-    getProfilePosts(targetProfileId)
+    getProfileFeed(targetProfileId)
       .then(data => { if (active) setUserPosts(data) })
+      .catch(() => {})
+    getUserComments(targetProfileId)
+      .then(data => { if (active) setUserComments(data) })
       .catch(() => {})
     return () => { active = false }
   }, [targetProfileId, postsVersion])
@@ -463,7 +468,6 @@ export default function ProfileScreen({ route, navigation }: any) {
   }
 
   const initials = getInitials(profileUser.display_name)
-  const userComments = comments.filter(cm => cm.user_id === profileUser.id)
 
   const tabs: { key: ProfileTab; label: string }[] = [
     { key: 'posts', label: t('profile_posts') },

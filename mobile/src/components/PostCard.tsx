@@ -1,5 +1,5 @@
-import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native'
+import React, { useState, useEffect } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native'
 import { CommunityPost } from '../types'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
@@ -28,12 +28,14 @@ export default function PostCard({ post, onPress }: Props) {
   const {
     theme,
     isLoggedIn,
-    savedPostIds,
     likedPostIds,
     repostedPostIds,
+    savedPostIds,
     toggleLikePost,
     toggleSavePost,
-    toggleRepostPost,
+    repostPost,
+    unrepostPost,
+    t,
   } = useApp()
   const { requireAuth } = useAuth()
   const c = getTheme(theme)
@@ -42,12 +44,76 @@ export default function PostCard({ post, onPress }: Props) {
   const isReposted = repostedPostIds.includes(post.id)
   const isSaved = savedPostIds.includes(post.id)
 
-  const runAuthenticated = (action: () => void) => {
-    if (!isLoggedIn) {
-      requireAuth()
-      return
+  const [likesCount, setLikesCount] = useState(post.likes_count)
+  const [repostsCount, setRepostsCount] = useState(post.reposts_count)
+
+  useEffect(() => {
+    setLikesCount(post.likes_count)
+    setRepostsCount(post.reposts_count)
+  }, [post.likes_count, post.reposts_count])
+
+  const handleLike = async () => {
+    if (!isLoggedIn) { requireAuth(); return }
+    try {
+      const result = await toggleLikePost(post.id)
+      setLikesCount(result.count)
+    } catch {}
+  }
+
+  const handleRepost = () => {
+    if (!isLoggedIn) { requireAuth(); return }
+
+    if (isReposted) {
+      Alert.alert(
+        undefined as any,
+        undefined,
+        [
+          {
+            text: t('repost_undo'),
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const result = await unrepostPost(post.id)
+                setRepostsCount(result.count)
+              } catch {}
+            },
+          },
+          {
+            text: t('repost_quote'),
+            onPress: () => Alert.alert(t('coming_soon')),
+          },
+          { text: t('cancel'), style: 'cancel' },
+        ],
+      )
+    } else {
+      Alert.alert(
+        undefined as any,
+        undefined,
+        [
+          {
+            text: t('repost_send'),
+            onPress: async () => {
+              try {
+                const result = await repostPost(post.id)
+                setRepostsCount(result.count)
+              } catch {}
+            },
+          },
+          {
+            text: t('repost_quote'),
+            onPress: () => Alert.alert(t('coming_soon')),
+          },
+          { text: t('cancel'), style: 'cancel' },
+        ],
+      )
     }
-    action()
+  }
+
+  const handleSave = async () => {
+    if (!isLoggedIn) { requireAuth(); return }
+    try {
+      await toggleSavePost(post.id)
+    } catch {}
   }
 
   return (
@@ -57,6 +123,13 @@ export default function PostCard({ post, onPress }: Props) {
       onPress={onPress}
       disabled={!onPress}
     >
+      {post.reposted_by && (
+        <View style={styles.repostHeader}>
+          <Text style={{ color: c.textMuted, fontSize: 12 }}>
+            🔄 {post.reposted_by.display_name} yeniden paylaştı
+          </Text>
+        </View>
+      )}
       <View style={styles.header}>
         {post.user?.avatar_url ? (
           <Image source={{ uri: post.user.avatar_url }} style={styles.avatarImage} />
@@ -96,32 +169,26 @@ export default function PostCard({ post, onPress }: Props) {
       )}
 
       <View style={[styles.actions, { borderTopColor: c.border }]}>
-        <TouchableOpacity
-          style={styles.action}
-          onPress={() => runAuthenticated(() => toggleLikePost(post.id))}
-        >
+        <TouchableOpacity style={styles.action} onPress={handleLike}>
           <Text style={{ color: isLiked ? colors.red : c.textMuted, fontSize: 13 }}>
-            {isLiked ? '❤' : '♡'} {post.likes_count + (isLiked ? 1 : 0)}
+            {isLiked ? '❤' : '♡'} {likesCount}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.action}
-          onPress={() => runAuthenticated(() => onPress?.())}
+          onPress={() => {
+            if (!isLoggedIn) { requireAuth(); return }
+            onPress?.()
+          }}
         >
           <Text style={{ color: c.textMuted, fontSize: 13 }}>💬 {post.comments_count}</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.action}
-          onPress={() => runAuthenticated(() => toggleRepostPost(post.id))}
-        >
+        <TouchableOpacity style={styles.action} onPress={handleRepost}>
           <Text style={{ color: isReposted ? colors.teal : c.textMuted, fontSize: 13 }}>
-            🔄 {post.reposts_count + (isReposted ? 1 : 0)}
+            🔄 {repostsCount}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.action}
-          onPress={() => runAuthenticated(() => toggleSavePost(post.id))}
-        >
+        <TouchableOpacity style={styles.action} onPress={handleSave}>
           <Text style={{ color: isSaved ? colors.teal : c.textMuted, fontSize: 13 }}>
             {isSaved ? '🔖' : '☆'}
           </Text>
@@ -133,6 +200,7 @@ export default function PostCard({ post, onPress }: Props) {
 
 const styles = StyleSheet.create({
   container: { padding: 16, borderBottomWidth: 1 },
+  repostHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingLeft: 56 },
   header: { flexDirection: 'row', gap: 12 },
   avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   avatarImage: { width: 44, height: 44, borderRadius: 22, resizeMode: 'cover' },

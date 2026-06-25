@@ -80,15 +80,64 @@ export async function getFollowingPosts(
   const ids = follows?.map(f => f.following_id) ?? []
   if (ids.length === 0) return []
 
-  const { data, error } = await supabase
-    .from('posts')
-    .select(POST_SELECT)
-    .in('user_id', ids)
-    .order('created_at', { ascending: false })
-    .limit(limit)
+  const [postsRes, repostsRes] = await Promise.all([
+    supabase
+      .from('posts')
+      .select(POST_SELECT)
+      .in('user_id', ids)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('post_reposts')
+      .select('post_id, created_at, user_id')
+      .in('user_id', ids)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+  ])
 
-  if (error) throw error
-  return (data ?? []).map(mapRow)
+  if (postsRes.error) throw postsRes.error
+  if (repostsRes.error) throw repostsRes.error
+
+  const entries: { post: CommunityPost; sortDate: string }[] =
+    (postsRes.data ?? []).map(row => ({ post: mapRow(row), sortDate: row.created_at }))
+
+  const repostRows = repostsRes.data ?? []
+  if (repostRows.length > 0) {
+    const repostPostIds = repostRows.map(r => r.post_id)
+    const repostUserIds = [...new Set(repostRows.map(r => r.user_id))]
+
+    const [rpPostsRes, rpProfilesRes] = await Promise.all([
+      supabase.from('posts').select(POST_SELECT).in('id', repostPostIds),
+      supabase.from('profiles').select('id, display_name, username').in('id', repostUserIds),
+    ])
+
+    if (rpPostsRes.error) throw rpPostsRes.error
+
+    const profileMap = new Map<string, { display_name: string; username: string }>()
+    for (const p of rpProfilesRes.data ?? []) {
+      profileMap.set(p.id, { display_name: p.display_name, username: p.username })
+    }
+
+    for (const row of rpPostsRes.data ?? []) {
+      const repostRow = repostRows.find(r => r.post_id === row.id)
+      if (!repostRow) continue
+      const post = mapRow(row)
+      post.reposted_by = profileMap.get(repostRow.user_id)
+      entries.push({ post, sortDate: repostRow.created_at })
+    }
+  }
+
+  entries.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime())
+
+  const seen = new Set<string>()
+  const deduped: CommunityPost[] = []
+  for (const entry of entries) {
+    if (!seen.has(entry.post.id)) {
+      seen.add(entry.post.id)
+      deduped.push(entry.post)
+    }
+  }
+  return deduped.slice(0, limit)
 }
 
 export async function getExplorePosts(limit = 30): Promise<CommunityPost[]> {
@@ -115,6 +164,71 @@ export async function getProfilePosts(
 
   if (error) throw error
   return (data ?? []).map(mapRow)
+}
+
+export async function getProfileFeed(
+  userId: string,
+  limit = 30,
+): Promise<CommunityPost[]> {
+  const [ownRes, repostRes, profileRes] = await Promise.all([
+    supabase
+      .from('posts')
+      .select(POST_SELECT)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('post_reposts')
+      .select('post_id, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('profiles')
+      .select('display_name, username')
+      .eq('id', userId)
+      .single(),
+  ])
+
+  if (ownRes.error) throw ownRes.error
+  if (repostRes.error) throw repostRes.error
+
+  const entries: { post: CommunityPost; sortDate: string }[] =
+    (ownRes.data ?? []).map(row => ({ post: mapRow(row), sortDate: row.created_at }))
+
+  const repostRows = repostRes.data ?? []
+  if (repostRows.length > 0) {
+    const repostIds = repostRows.map(r => r.post_id)
+    const { data: rpData, error: rpErr } = await supabase
+      .from('posts')
+      .select(POST_SELECT)
+      .in('id', repostIds)
+
+    if (rpErr) throw rpErr
+
+    const repostBy = profileRes.data
+      ? { display_name: profileRes.data.display_name, username: profileRes.data.username }
+      : undefined
+
+    for (const row of rpData ?? []) {
+      const repostRow = repostRows.find(r => r.post_id === row.id)
+      const post = mapRow(row)
+      post.reposted_by = repostBy
+      entries.push({ post, sortDate: repostRow?.created_at ?? row.created_at })
+    }
+  }
+
+  entries.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime())
+
+  const seen = new Set<string>()
+  const deduped: CommunityPost[] = []
+  for (const entry of entries) {
+    if (!seen.has(entry.post.id)) {
+      seen.add(entry.post.id)
+      deduped.push(entry.post)
+    }
+  }
+  return deduped.slice(0, limit)
 }
 
 export async function getPostById(

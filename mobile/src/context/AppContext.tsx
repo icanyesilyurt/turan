@@ -1,10 +1,18 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { AppLanguage, Theme, User, CommunityComment, Conversation, DirectMessage } from '../types'
+import { AppLanguage, Theme, User, Conversation, DirectMessage } from '../types'
 import translations from '../i18n/translations'
 import { demoConversations, demoMessages } from '../data/demo'
 import { useAuth } from './AuthContext'
 import { getFollowCounts, getUnreadNotificationCount } from '../services/profileService'
+import {
+  toggleLike,
+  repostPost as repostPostApi,
+  unrepostPost as unrepostPostApi,
+  toggleSave,
+  getUserInteractions,
+  createInteractionNotification,
+} from '../services/interactionService'
 
 export interface Draft {
   id: string
@@ -22,19 +30,18 @@ interface AppContextType {
   isLoggedIn: boolean
   postsVersion: number
   incrementPostsVersion: () => void
-  comments: CommunityComment[]
-  setComments: React.Dispatch<React.SetStateAction<CommunityComment[]>>
   conversations: Conversation[]
   messages: DirectMessage[]
   setMessages: React.Dispatch<React.SetStateAction<DirectMessage[]>>
   unreadNotifCount: number
   refreshUnreadCount: () => void
   savedPostIds: string[]
-  toggleSavePost: (id: string) => void
   likedPostIds: string[]
-  toggleLikePost: (id: string) => void
   repostedPostIds: string[]
-  toggleRepostPost: (id: string) => void
+  toggleLikePost: (postId: string) => Promise<{ liked: boolean; count: number }>
+  repostPost: (postId: string) => Promise<{ count: number }>
+  unrepostPost: (postId: string) => Promise<{ count: number }>
+  toggleSavePost: (postId: string) => Promise<{ saved: boolean }>
   drafts: Draft[]
   addDraft: (text: string) => void
   removeDraft: (id: string) => void
@@ -46,7 +53,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { user: authUser, profile } = useAuth()
   const [language, setLanguageState] = useState<AppLanguage>('tr')
   const [theme, setThemeState] = useState<Theme>('dark')
-  const [comments, setComments] = useState<CommunityComment[]>([])
   const [conversations] = useState<Conversation[]>(demoConversations)
   const [messages, setMessages] = useState<DirectMessage[]>(demoMessages)
   const [savedPostIds, setSavedPostIds] = useState<string[]>([])
@@ -64,6 +70,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!profile) {
       setFollowCountsState({ followers: 0, following: 0 })
       setUnreadNotifCount(0)
+      setLikedPostIds([])
+      setRepostedPostIds([])
+      setSavedPostIds([])
       return
     }
     getFollowCounts(profile.id)
@@ -71,6 +80,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .catch(() => {})
     getUnreadNotificationCount(profile.id)
       .then(setUnreadNotifCount)
+      .catch(() => {})
+    getUserInteractions(profile.id)
+      .then(({ likedPostIds: l, repostedPostIds: r, savedPostIds: s }) => {
+        setLikedPostIds(l)
+        setRepostedPostIds(r)
+        setSavedPostIds(s)
+      })
       .catch(() => {})
   }, [profile?.id])
 
@@ -104,20 +120,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const [lang, th, sp, dr, lp, rp] = await Promise.all([
+      const [lang, th, dr] = await Promise.all([
         AsyncStorage.getItem('turan_lang'),
         AsyncStorage.getItem('turan_theme'),
-        AsyncStorage.getItem('turan_saved_posts'),
         AsyncStorage.getItem('turan_drafts'),
-        AsyncStorage.getItem('turan_liked_posts'),
-        AsyncStorage.getItem('turan_reposted_posts'),
       ])
       if (lang) setLanguageState(lang as AppLanguage)
       if (th) setThemeState(th as Theme)
-      if (sp) setSavedPostIds(JSON.parse(sp))
       if (dr) setDrafts(JSON.parse(dr))
-      if (lp) setLikedPostIds(JSON.parse(lp))
-      if (rp) setRepostedPostIds(JSON.parse(rp))
       setLoaded(true)
     })()
   }, [])
@@ -132,29 +142,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
   const t = (key: string): string => translations[language]?.[key] || translations.tr[key] || key
 
-  const toggleSavePost = (id: string) => {
-    setSavedPostIds(prev => {
-      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-      AsyncStorage.setItem('turan_saved_posts', JSON.stringify(next))
-      return next
-    })
-  }
+  const toggleLikePost = useCallback(async (postId: string) => {
+    if (!profile) throw new Error('Not authenticated')
+    const result = await toggleLike(postId, profile.id)
+    setLikedPostIds(prev =>
+      result.liked ? [...prev, postId] : prev.filter(id => id !== postId),
+    )
+    if (result.liked) {
+      createInteractionNotification('like', profile.id, postId, profile.username).catch(() => {})
+    }
+    return result
+  }, [profile?.id, profile?.username])
 
-  const toggleLikePost = (id: string) => {
-    setLikedPostIds(prev => {
-      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-      AsyncStorage.setItem('turan_liked_posts', JSON.stringify(next))
-      return next
-    })
-  }
+  const repostPost = useCallback(async (postId: string) => {
+    if (!profile) throw new Error('Not authenticated')
+    const result = await repostPostApi(postId, profile.id)
+    setRepostedPostIds(prev => prev.includes(postId) ? prev : [...prev, postId])
+    setPostsVersion(v => v + 1)
+    createInteractionNotification('repost', profile.id, postId, profile.username).catch(() => {})
+    return result
+  }, [profile?.id, profile?.username])
 
-  const toggleRepostPost = (id: string) => {
-    setRepostedPostIds(prev => {
-      const next = prev.includes(id) ? [...prev] : [...prev, id]
-      AsyncStorage.setItem('turan_reposted_posts', JSON.stringify(next))
-      return next
-    })
-  }
+  const unrepostPost = useCallback(async (postId: string) => {
+    if (!profile) throw new Error('Not authenticated')
+    const result = await unrepostPostApi(postId, profile.id)
+    setRepostedPostIds(prev => prev.filter(id => id !== postId))
+    setPostsVersion(v => v + 1)
+    return result
+  }, [profile?.id])
+
+  const toggleSavePost = useCallback(async (postId: string) => {
+    if (!profile) throw new Error('Not authenticated')
+    const result = await toggleSave(postId, profile.id)
+    setSavedPostIds(prev =>
+      result.saved ? [...prev, postId] : prev.filter(id => id !== postId),
+    )
+    return result
+  }, [profile?.id])
 
   const addDraft = (text: string) => {
     if (!text.trim()) return
@@ -180,13 +204,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       language, setLanguage, theme, setTheme, t,
       user, isLoggedIn: !!user,
       postsVersion, incrementPostsVersion,
-      comments, setComments,
       conversations, messages, setMessages,
       unreadNotifCount,
       refreshUnreadCount,
-      savedPostIds, toggleSavePost,
-      likedPostIds, toggleLikePost,
-      repostedPostIds, toggleRepostPost,
+      savedPostIds, likedPostIds, repostedPostIds,
+      toggleLikePost, repostPost, unrepostPost, toggleSavePost,
       drafts, addDraft, removeDraft,
     }}>
       {children}
