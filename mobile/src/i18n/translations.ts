@@ -136,6 +136,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     post_report: 'Bildir',
     post_block_user: 'Kullaniciyi Engelle',
     post_deleted_placeholder: 'Bu gonderi silindi veya artik mevcut degil.',
+    comment_reply_placeholder: 'Yanit yaz...',
+    replied_to_post: 'Gonderiye yanit verdi',
+    replied_to_comment: 'Yoruma yanit verdi',
   },
   az: {
     tab_home: 'Ana Sehife',
@@ -272,6 +275,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     post_report: 'Sikayet Et',
     post_block_user: 'Istifadecini Blokla',
     post_deleted_placeholder: 'Bu paylasim silindi ve ya artiq movcud deyil.',
+    comment_reply_placeholder: 'Cavab yaz...',
+    replied_to_post: 'Paylasima cavab verdi',
+    replied_to_comment: 'Serhe cavab verdi',
   },
   kk: {
     tab_home: 'Basty bet',
@@ -408,6 +414,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     post_report: 'Sikayet Etu',
     post_block_user: 'Qoldanushyny Bugatau',
     post_deleted_placeholder: 'Bul jazba joiyldy nemese endi joq.',
+    comment_reply_placeholder: 'Jauap jazу...',
+    replied_to_post: 'Zharylymdyga jauap berdi',
+    replied_to_comment: 'Pikyrge jauap berdi',
   },
   ky: {
     tab_home: 'Bashy bet',
@@ -544,6 +553,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     post_report: 'Dattanuu',
     post_block_user: 'Koldonuuchunu Bloktoo',
     post_deleted_placeholder: 'Bul jazba ochuruldu же joq bolup ketdi.',
+    comment_reply_placeholder: 'Joop jazuu...',
+    replied_to_post: 'Postko joop berdi',
+    replied_to_comment: 'Pikyrge joop berdi',
   },
   uz: {
     tab_home: 'Bosh sahifa',
@@ -680,6 +692,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     post_report: "Shikoyat qilish",
     post_block_user: "Foydalanuvchini bloklash",
     post_deleted_placeholder: "Bu post o'chirilgan yoki endi mavjud emas.",
+    comment_reply_placeholder: "Javob yozing...",
+    replied_to_post: "Postga javob berdi",
+    replied_to_comment: "Izohga javob berdi",
   },
   tk: {
     tab_home: 'Bash sahypa',
@@ -816,6 +831,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     post_report: 'Sikayet Et',
     post_block_user: 'Ulanyjyny Blokirle',
     post_deleted_placeholder: 'Bu yazgy pozuldy ya-da indi yok.',
+    comment_reply_placeholder: 'Jogap yaz...',
+    replied_to_post: 'Posta jogap berdi',
+    replied_to_comment: 'Teswire jogap berdi',
   },
 }
 

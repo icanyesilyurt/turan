@@ -295,3 +295,80 @@ create policy "Users can delete their own covers"
     bucket_id = 'covers'
     and (storage.foldername(name))[1] = (select auth.uid()::text)
   );
+
+create or replace function public.refresh_post_comment_counters()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  affected_post_ids uuid[];
+  affected_comment_ids uuid[];
+begin
+  affected_post_ids := array_remove(array[
+    case when tg_op in ('INSERT', 'UPDATE') then new.post_id end,
+    case when tg_op in ('DELETE', 'UPDATE') then old.post_id end
+  ], null);
+
+  affected_comment_ids := array_remove(array[
+    case when tg_op in ('INSERT', 'UPDATE') then new.parent_comment_id end,
+    case when tg_op in ('DELETE', 'UPDATE') then old.parent_comment_id end
+  ], null);
+
+  update public.posts
+  set comments_count = (
+    select count(*)::integer
+    from public.post_comments
+    where post_comments.post_id = posts.id
+      and post_comments.parent_comment_id is null
+  )
+  where id = any(affected_post_ids);
+
+  update public.post_comments
+  set replies_count = (
+    select count(*)::integer
+    from public.post_comments as replies
+    where replies.parent_comment_id = post_comments.id
+  )
+  where id = any(affected_comment_ids);
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists refresh_post_comment_counters_on_insert on public.post_comments;
+drop trigger if exists refresh_post_comment_counters_on_delete on public.post_comments;
+drop trigger if exists refresh_post_comment_counters_on_change on public.post_comments;
+create constraint trigger refresh_post_comment_counters_on_change
+  after insert or update or delete on public.post_comments
+  deferrable initially deferred
+  for each row
+  execute function public.refresh_post_comment_counters();
+
+update public.posts
+set comments_count = counts.total
+from (
+  select posts.id, count(post_comments.id)::integer as total
+  from public.posts
+  left join public.post_comments
+    on post_comments.post_id = posts.id
+    and post_comments.parent_comment_id is null
+  group by posts.id
+) as counts
+where posts.id = counts.id;
+
+update public.post_comments
+set replies_count = counts.total
+from (
+  select parent.id, count(reply.id)::integer as total
+  from public.post_comments as parent
+  left join public.post_comments as reply
+    on reply.parent_comment_id = parent.id
+  group by parent.id
+) as counts
+where post_comments.id = counts.id;

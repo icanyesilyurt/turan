@@ -28,9 +28,10 @@ import {
   createFollowNotification,
 } from '../services/profileService'
 import { getProfileFeed } from '../services/postService'
-import { getUserComments } from '../services/interactionService'
+import { getUserComments, getUserCommentInteractions } from '../services/interactionService'
 import { Profile, User, CommunityComment } from '../types'
 import PostCard from '../components/PostCard'
+import CommentCard from '../components/CommentCard'
 import EditProfileModal from '../components/EditProfileModal'
 import FollowListModal from '../components/FollowListModal'
 
@@ -148,6 +149,9 @@ export default function ProfileScreen({ route, navigation }: any) {
   const [followListTab, setFollowListTab] = useState<'following' | 'followers'>('followers')
   const [userPosts, setUserPosts] = useState<import('../types').CommunityPost[]>([])
   const [userComments, setUserComments] = useState<CommunityComment[]>([])
+  const [likedCommentIds, setLikedCommentIds] = useState<string[]>([])
+  const [repostedCommentIds, setRepostedCommentIds] = useState<string[]>([])
+  const [savedCommentIds, setSavedCommentIds] = useState<string[]>([])
 
   const showPermissionAlert = (
     messageKey: 'camera_permission_message' | 'gallery_permission_message',
@@ -357,8 +361,19 @@ export default function ProfileScreen({ route, navigation }: any) {
     getUserComments(targetProfileId)
       .then(data => { if (active) setUserComments(data) })
       .catch(() => {})
+    if (currentProfile) {
+      getUserCommentInteractions(currentProfile.id)
+        .then(data => {
+          if (active) {
+            setLikedCommentIds(data.likedCommentIds)
+            setRepostedCommentIds(data.repostedCommentIds)
+            setSavedCommentIds(data.savedCommentIds)
+          }
+        })
+        .catch(() => {})
+    }
     return () => { active = false }
-  }, [targetProfileId, postsVersion])
+  }, [targetProfileId, postsVersion, currentProfile?.id])
 
   const handleFollowToggle = async () => {
     if (!currentProfile) { requireAuth(); return }
@@ -658,17 +673,31 @@ export default function ProfileScreen({ route, navigation }: any) {
             )
           }
           if (activeTab === 'comments') {
+            const ctx = item.parent_comment_id
+              ? '↩ ' + t('replied_to_comment')
+              : '💬 ' + t('replied_to_post')
             return (
-              <TouchableOpacity
-                style={[styles.commentItem, { borderBottomColor: c.border }]}
-                activeOpacity={0.7}
-                onPress={() => item.post_id ? navigation.navigate('PostDetail', { postId: item.post_id }) : undefined}
-              >
-                <Text style={{ color: c.textMuted, fontSize: 12, marginBottom: 4 }}>
-                  💬 {t('comment')}
-                </Text>
-                <Text style={{ color: c.text, fontSize: 14, lineHeight: 20 }}>{item.text}</Text>
-              </TouchableOpacity>
+              <CommentCard
+                comment={item}
+                likedIds={likedCommentIds}
+                repostedIds={repostedCommentIds}
+                savedIds={savedCommentIds}
+                contextLabel={ctx}
+                onToggleLike={(id, result) => {
+                  setLikedCommentIds(prev => result.liked ? [...prev, id] : prev.filter(x => x !== id))
+                }}
+                onToggleRepost={(id, reposted) => {
+                  setRepostedCommentIds(prev => reposted ? [...prev, id] : prev.filter(x => x !== id))
+                }}
+                onToggleSave={(id, saved) => {
+                  setSavedCommentIds(prev => saved ? [...prev, id] : prev.filter(x => x !== id))
+                }}
+                onReplyAdded={() => {}}
+                onDeleted={(id) => setUserComments(prev => prev.filter(cm => cm.id !== id))}
+                onProfilePress={(uid) => navigation.push('Profile', { userId: uid })}
+                onPostPress={(pid) => navigation.navigate('PostDetail', { postId: pid })}
+                onPress={(commentId) => navigation.navigate('CommentDetail', { commentId })}
+              />
             )
           }
           return null
@@ -827,7 +856,6 @@ const styles = StyleSheet.create({
   tabItem: { flex: 1, alignItems: 'center', paddingVertical: 14 },
   tabText: { fontSize: 13, fontWeight: '600' },
   tabIndicator: { position: 'absolute', bottom: 0, width: 36, height: 3, borderRadius: 2, backgroundColor: colors.teal },
-  commentItem: { padding: 16, borderBottomWidth: 1 },
   emptyTab: { alignItems: 'center', padding: 50 },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 },
   welcomeTitle: { fontSize: 22, fontWeight: '700', marginBottom: 8 },

@@ -84,6 +84,11 @@ export interface CommunityComment {
   user_id: string
   user?: User
   text: string
+  image_url?: string
+  likes_count: number
+  reposts_count: number
+  replies_count: number
+  parent_comment_id?: string | null
   created_at: string
 }
 

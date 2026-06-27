@@ -13,6 +13,7 @@ import ProfileScreen from '../screens/ProfileScreen'
 import SavedScreen from '../screens/SavedScreen'
 import SettingsScreen from '../screens/SettingsScreen'
 import PostDetailScreen from '../screens/PostDetailScreen'
+import CommentDetailScreen from '../screens/CommentDetailScreen'
 import ChatScreen from '../screens/ChatScreen'
 import DraftsScreen from '../screens/DraftsScreen'
 import DrawerMenu from '../components/DrawerMenu'
@@ -28,6 +29,7 @@ function HomeStack({ onOpenDrawer }: { onOpenDrawer: () => void }) {
         {(props) => <HomeScreen {...props} onOpenDrawer={onOpenDrawer} />}
       </Stack.Screen>
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+      <Stack.Screen name="CommentDetail" component={CommentDetailScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
     </Stack.Navigator>
   )
@@ -38,6 +40,7 @@ function SearchStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SearchMain" component={SearchScreen} />
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+      <Stack.Screen name="CommentDetail" component={CommentDetailScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
     </Stack.Navigator>
   )
@@ -48,6 +51,7 @@ function NotificationsStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="NotificationsMain" component={NotificationsScreen} />
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+      <Stack.Screen name="CommentDetail" component={CommentDetailScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
     </Stack.Navigator>
   )
@@ -120,6 +124,7 @@ export default function AppNavigator() {
                 {(props) => <HomeScreen {...props} onOpenDrawer={() => setDrawerOpen(true)} />}
               </Stack.Screen>
               <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+              <Stack.Screen name="CommentDetail" component={CommentDetailScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />
               <Stack.Screen name="Saved" component={SavedScreen} />
               <Stack.Screen name="Settings" component={SettingsScreen} />

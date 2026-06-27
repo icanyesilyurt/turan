@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase'
 import { CommunityPost, Profile } from '../types'
 
-function mapRow(row: any): CommunityPost {
+function mapRow(row: any, rootCommentCount?: number): CommunityPost {
   const p = row.author as Profile | null
   return {
     id: row.id,
@@ -29,7 +29,7 @@ function mapRow(row: any): CommunityPost {
     image_url: row.image_url ?? undefined,
     is_official: row.is_official,
     likes_count: row.likes_count,
-    comments_count: row.comments_count,
+    comments_count: rootCommentCount ?? row.comments_count,
     reposts_count: row.reposts_count,
     created_at: row.created_at,
     is_liked: false,
@@ -39,6 +39,37 @@ function mapRow(row: any): CommunityPost {
 }
 
 const POST_SELECT = '*, author:profiles!posts_user_id_fkey(*)'
+
+async function getRootCommentCountMap(postIds: string[]): Promise<Map<string, number>> {
+  const uniqueIds = [...new Set(postIds)]
+  const counts = new Map<string, number>()
+  for (const id of uniqueIds) counts.set(id, 0)
+  if (uniqueIds.length === 0) return counts
+
+  const { data, error } = await supabase
+    .from('post_comments')
+    .select('post_id')
+    .in('post_id', uniqueIds)
+    .is('parent_comment_id', null)
+
+  if (error) throw error
+
+  for (const row of data ?? []) {
+    counts.set(row.post_id, (counts.get(row.post_id) ?? 0) + 1)
+  }
+
+  return counts
+}
+
+async function mapRowsWithRootCommentCounts(rows: any[]): Promise<CommunityPost[]> {
+  const counts = await getRootCommentCountMap(rows.map(row => row.id))
+  return rows.map(row => mapRow(row, counts.get(row.id) ?? 0))
+}
+
+async function withRootCommentCounts(posts: CommunityPost[]): Promise<CommunityPost[]> {
+  const counts = await getRootCommentCountMap(posts.map(post => post.id))
+  return posts.map(post => ({ ...post, comments_count: counts.get(post.id) ?? 0 }))
+}
 
 export async function createPost(
   userId: string,
@@ -64,7 +95,7 @@ export async function getOfficialPosts(limit = 30): Promise<CommunityPost[]> {
     .limit(limit)
 
   if (error) throw error
-  return (data ?? []).map(mapRow)
+  return mapRowsWithRootCommentCounts(data ?? [])
 }
 
 export async function getFollowingPosts(
@@ -138,7 +169,7 @@ export async function getFollowingPosts(
       deduped.push(entry.post)
     }
   }
-  return deduped.slice(0, limit)
+  return withRootCommentCounts(deduped.slice(0, limit))
 }
 
 export async function getExplorePosts(limit = 30): Promise<CommunityPost[]> {
@@ -149,7 +180,7 @@ export async function getExplorePosts(limit = 30): Promise<CommunityPost[]> {
     .limit(limit)
 
   if (error) throw error
-  return (data ?? []).map(mapRow)
+  return mapRowsWithRootCommentCounts(data ?? [])
 }
 
 export async function getProfilePosts(
@@ -164,7 +195,7 @@ export async function getProfilePosts(
     .limit(limit)
 
   if (error) throw error
-  return (data ?? []).map(mapRow)
+  return mapRowsWithRootCommentCounts(data ?? [])
 }
 
 export async function getProfileFeed(
@@ -234,7 +265,7 @@ export async function getProfileFeed(
       }
     }
   }
-  return [...pinned, ...regular].slice(0, limit)
+  return withRootCommentCounts([...pinned, ...regular].slice(0, limit))
 }
 
 export async function getPostById(
@@ -247,7 +278,9 @@ export async function getPostById(
     .maybeSingle()
 
   if (error) throw error
-  return data ? mapRow(data) : null
+  if (!data) return null
+  const counts = await getRootCommentCountMap([data.id])
+  return mapRow(data, counts.get(data.id) ?? 0)
 }
 
 export async function getPostsByIds(
@@ -262,7 +295,7 @@ export async function getPostsByIds(
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return (data ?? []).map(mapRow)
+  return mapRowsWithRootCommentCounts(data ?? [])
 }
 
 export async function deletePost(postId: string): Promise<void> {

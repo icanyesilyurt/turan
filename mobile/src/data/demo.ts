@@ -149,10 +149,10 @@ export const explorePosts: CommunityPost[] = [
 ]
 
 export const demoComments: CommunityComment[] = [
-  { id: 'cm1', post_id: 'op1', user_id: 'u2', user: demoUsers[1], text: 'Çox güclü sözlər!', created_at: '2024-06-24T11:00:00' },
-  { id: 'cm2', post_id: 'op1', user_id: 'u3', user: demoUsers[2], text: 'Орхон жазбалары — біздің ортақ мұрамыз!', created_at: '2024-06-24T11:30:00' },
-  { id: 'cm3', post_id: 'fp1', user_id: 'u1', user: demoUsers[0], text: 'Nevruz tüm Türk dünyasının ortak bayramı. Kutlu olsun!', created_at: '2024-06-24T09:45:00' },
-  { id: 'cm4', post_id: 'ep1', user_id: 'u3', user: demoUsers[2], text: 'Қазақша да "Су" деп айтамыз. Ортақтығымыз айқын!', created_at: '2024-06-24T12:00:00' },
+  { id: 'cm1', post_id: 'op1', user_id: 'u2', user: demoUsers[1], text: 'Çox güclü sözlər!', likes_count: 0, reposts_count: 0, replies_count: 0, created_at: '2024-06-24T11:00:00' },
+  { id: 'cm2', post_id: 'op1', user_id: 'u3', user: demoUsers[2], text: 'Орхон жазбалары — біздің ортақ мұрамыз!', likes_count: 0, reposts_count: 0, replies_count: 0, created_at: '2024-06-24T11:30:00' },
+  { id: 'cm3', post_id: 'fp1', user_id: 'u1', user: demoUsers[0], text: 'Nevruz tüm Türk dünyasının ortak bayramı. Kutlu olsun!', likes_count: 0, reposts_count: 0, replies_count: 0, created_at: '2024-06-24T09:45:00' },
+  { id: 'cm4', post_id: 'ep1', user_id: 'u3', user: demoUsers[2], text: 'Қазақша да "Су" деп айтамыз. Ортақтығымыз айқын!', likes_count: 0, reposts_count: 0, replies_count: 0, created_at: '2024-06-24T12:00:00' },
 ]
 
 export const demoConversations: Conversation[] = [

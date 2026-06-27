@@ -1,87 +1,120 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
-import { getPostById } from '../services/postService'
 import {
-  getPostComments,
   addComment,
-  createInteractionNotification,
   getUserCommentInteractions,
+  createCommentNotification,
+  createInteractionNotification,
 } from '../services/interactionService'
 import { supabase } from '../lib/supabase'
-import { CommunityPost, CommunityComment } from '../types'
-import PostCard from '../components/PostCard'
+import { CommunityComment } from '../types'
 import CommentCard from '../components/CommentCard'
 
-export default function PostDetailScreen({ route, navigation }: any) {
-  const { postId } = route.params
+const COMMENT_SELECT = '*, author:profiles!post_comments_user_id_fkey(*)'
+
+function mapComment(row: any): CommunityComment {
+  const p = row.author
+  return {
+    id: row.id,
+    post_id: row.post_id,
+    user_id: row.user_id,
+    user: p ? {
+      id: p.id, email: '', display_name: p.display_name, username: p.username,
+      country: p.country ?? '', city: p.city ?? '', bio: p.bio,
+      avatar_url: p.avatar_url ?? '', cover_url: p.cover_url ?? '',
+      app_language: p.app_language, theme: 'dark', membership_status: p.membership_status,
+      created_at: p.created_at, followers_count: 0, following_count: 0,
+    } : undefined,
+    text: row.text,
+    image_url: row.image_url ?? undefined,
+    likes_count: row.likes_count ?? 0,
+    reposts_count: row.reposts_count ?? 0,
+    replies_count: row.replies_count ?? 0,
+    parent_comment_id: row.parent_comment_id ?? null,
+    created_at: row.created_at,
+  }
+}
+
+export default function CommentDetailScreen({ route, navigation }: any) {
+  const { commentId } = route.params
   const { t, theme, isLoggedIn } = useApp()
   const { profile, requireAuth } = useAuth()
   const c = getTheme(theme)
-  const [commentText, setCommentText] = useState('')
-  const [post, setPost] = useState<CommunityPost | null>(null)
-  const [allComments, setAllComments] = useState<CommunityComment[]>([])
+
+  const [parentComment, setParentComment] = useState<CommunityComment | null>(null)
+  const [replies, setReplies] = useState<CommunityComment[]>([])
   const [loading, setLoading] = useState(true)
+  const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
-  const [likedCommentIds, setLikedCommentIds] = useState<string[]>([])
-  const [repostedCommentIds, setRepostedCommentIds] = useState<string[]>([])
-  const [savedCommentIds, setSavedCommentIds] = useState<string[]>([])
   const [mediaUri, setMediaUri] = useState<string | null>(null)
+  const [likedIds, setLikedIds] = useState<string[]>([])
+  const [repostedIds, setRepostedIds] = useState<string[]>([])
+  const [savedIds, setSavedIds] = useState<string[]>([])
 
   useEffect(() => {
     let active = true
     setLoading(true)
-    Promise.all([
-      getPostById(postId),
-      getPostComments(postId),
-      profile ? getUserCommentInteractions(profile.id) : Promise.resolve({ likedCommentIds: [], repostedCommentIds: [], savedCommentIds: [] }),
-    ])
-      .then(([postData, commentsData, interactions]) => {
-        if (active) {
-          setPost(postData)
-          setAllComments(commentsData)
-          setLikedCommentIds(interactions.likedCommentIds)
-          setRepostedCommentIds(interactions.repostedCommentIds)
-          setSavedCommentIds(interactions.savedCommentIds)
-        }
-      })
-      .catch(() => {})
-      .finally(() => { if (active) setLoading(false) })
+
+    const fetchData = async () => {
+      const { data: commentData, error: cErr } = await supabase
+        .from('post_comments')
+        .select(COMMENT_SELECT)
+        .eq('id', commentId)
+        .single()
+
+      if (cErr || !commentData) {
+        if (active) setLoading(false)
+        return
+      }
+
+      const { data: repliesData } = await supabase
+        .from('post_comments')
+        .select(COMMENT_SELECT)
+        .eq('parent_comment_id', commentId)
+        .order('created_at', { ascending: true })
+
+      let interactions = { likedCommentIds: [] as string[], repostedCommentIds: [] as string[], savedCommentIds: [] as string[] }
+      if (profile) {
+        try { interactions = await getUserCommentInteractions(profile.id) } catch {}
+      }
+
+      if (active) {
+        setParentComment(mapComment(commentData))
+        setReplies((repliesData ?? []).map(mapComment))
+        setLikedIds(interactions.likedCommentIds)
+        setRepostedIds(interactions.repostedCommentIds)
+        setSavedIds(interactions.savedCommentIds)
+        setLoading(false)
+      }
+    }
+
+    fetchData()
     return () => { active = false }
-  }, [postId, profile?.id])
-
-  const rootComments = useMemo(
-    () => allComments.filter(cm => !cm.parent_comment_id),
-    [allComments],
-  )
-
-  const postWithRootCommentCount = useMemo(
-    () => post ? { ...post, comments_count: rootComments.length } : null,
-    [post, rootComments.length],
-  )
+  }, [commentId, profile?.id])
 
   const handleToggleLike = (id: string, result: { liked: boolean; count: number }) => {
-    setLikedCommentIds(prev => result.liked ? [...prev, id] : prev.filter(x => x !== id))
+    setLikedIds(prev => result.liked ? [...prev, id] : prev.filter(x => x !== id))
   }
-
   const handleToggleRepost = (id: string, reposted: boolean) => {
-    setRepostedCommentIds(prev => reposted ? [...prev, id] : prev.filter(x => x !== id))
+    setRepostedIds(prev => reposted ? [...prev, id] : prev.filter(x => x !== id))
   }
-
   const handleToggleSave = (id: string, saved: boolean) => {
-    setSavedCommentIds(prev => saved ? [...prev, id] : prev.filter(x => x !== id))
+    setSavedIds(prev => saved ? [...prev, id] : prev.filter(x => x !== id))
   }
-
   const handleReplyAdded = (reply: CommunityComment) => {
-    setAllComments(prev => [...prev, reply])
+    setReplies(prev => [...prev, reply])
   }
-
-  const handleCommentDeleted = (commentId: string) => {
-    setAllComments(prev => prev.filter(cm => cm.id !== commentId && cm.parent_comment_id !== commentId))
-    getPostById(postId).then(freshPost => { if (freshPost) setPost(freshPost) }).catch(() => {})
+  const handleDeleted = (id: string) => {
+    if (id === commentId) {
+      navigation.goBack()
+      return
+    }
+    setReplies(prev => prev.filter(r => r.id !== id))
+    setParentComment(prev => prev ? { ...prev, replies_count: Math.max(0, prev.replies_count - 1) } : prev)
   }
 
   const pickImage = () => {
@@ -108,7 +141,7 @@ export default function PostDetailScreen({ route, navigation }: any) {
     ])
   }
 
-  const uploadCommentImage = async (uri: string): Promise<string> => {
+  const uploadImage = async (uri: string): Promise<string> => {
     const ext = uri.split('.').pop() ?? 'jpg'
     const fileName = `comment_${Date.now()}.${ext}`
     const response = await fetch(uri)
@@ -116,8 +149,28 @@ export default function PostDetailScreen({ route, navigation }: any) {
     const arrayBuffer = await new Response(blob).arrayBuffer()
     const { error } = await supabase.storage.from('comment-images').upload(fileName, arrayBuffer, { contentType: `image/${ext}` })
     if (error) throw error
-    const { data: urlData } = supabase.storage.from('comment-images').getPublicUrl(fileName)
-    return urlData.publicUrl
+    const { data } = supabase.storage.from('comment-images').getPublicUrl(fileName)
+    return data.publicUrl
+  }
+
+  const handleSendReply = async () => {
+    if ((!replyText.trim() && !mediaUri) || !profile || !parentComment) return
+    setSending(true)
+    try {
+      let imageUrl: string | undefined
+      if (mediaUri) imageUrl = await uploadImage(mediaUri)
+      const reply = await addComment(parentComment.post_id, profile.id, replyText.trim(), commentId, imageUrl)
+      setReplies(prev => [...prev, reply])
+      setParentComment(prev => prev ? { ...prev, replies_count: prev.replies_count + 1 } : prev)
+      setReplyText('')
+      setMediaUri(null)
+      createCommentNotification('comment_reply', profile.id, commentId, parentComment.post_id, profile.username).catch(() => {})
+      createInteractionNotification('comment', profile.id, parentComment.post_id, profile.username).catch(() => {})
+    } catch (err: any) {
+      console.error('[CommentDetail] sendReply ERROR', err)
+      Alert.alert('Hata', err?.message || 'Yanıt gönderilemedi')
+    }
+    setSending(false)
   }
 
   if (loading) {
@@ -135,7 +188,7 @@ export default function PostDetailScreen({ route, navigation }: any) {
     )
   }
 
-  if (!post) {
+  if (!parentComment) {
     return (
       <View style={[styles.container, { backgroundColor: c.bg }]}>
         <View style={[styles.header, { backgroundColor: c.bgSecondary, borderBottomColor: c.border }]}>
@@ -151,30 +204,8 @@ export default function PostDetailScreen({ route, navigation }: any) {
     )
   }
 
-  const canComment = isLoggedIn && !!profile
-  const hasContent = commentText.trim().length > 0 || !!mediaUri
-
-  const handleComment = async () => {
-    if (!hasContent || !profile) return
-    setSending(true)
-    try {
-      let imageUrl: string | undefined
-      if (mediaUri) {
-        imageUrl = await uploadCommentImage(mediaUri)
-      }
-      const newComment = await addComment(postId, profile.id, commentText.trim(), undefined, imageUrl)
-      setAllComments(prev => [...prev, newComment])
-      setCommentText('')
-      setMediaUri(null)
-      const freshPost = await getPostById(postId)
-      if (freshPost) setPost(freshPost)
-      createInteractionNotification('comment', profile.id, postId, profile.username).catch(() => {})
-    } catch (err: any) {
-      console.error('[PostDetail] handleComment ERROR', err)
-      Alert.alert('Hata', err?.message || 'Yorum gönderilemedi')
-    }
-    setSending(false)
-  }
+  const canReply = isLoggedIn && !!profile
+  const hasContent = replyText.trim().length > 0 || !!mediaUri
 
   return (
     <KeyboardAvoidingView
@@ -188,44 +219,53 @@ export default function PostDetailScreen({ route, navigation }: any) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <PostCard
-          post={postWithRootCommentCount ?? post}
-          onDeleted={() => navigation.goBack()}
+        <CommentCard
+          comment={parentComment}
+          likedIds={likedIds}
+          repostedIds={repostedIds}
+          savedIds={savedIds}
+          onToggleLike={handleToggleLike}
+          onToggleRepost={handleToggleRepost}
+          onToggleSave={handleToggleSave}
+          onReplyAdded={handleReplyAdded}
+          onDeleted={handleDeleted}
           onProfilePress={(userId) => navigation.navigate('Profile', { userId })}
+          onPress={(commentId) => navigation.push('CommentDetail', { commentId })}
         />
 
-        <View style={styles.commentsSection}>
-          <Text style={[styles.commentsTitle, { color: c.text }]}>
-            {t('comments_title')} ({rootComments.length})
+        <View style={styles.repliesSection}>
+          <Text style={[styles.repliesTitle, { color: c.text }]}>
+            {t('comments_title')} ({replies.length})
           </Text>
         </View>
 
-        {rootComments.map(cm => (
+        {replies.map(reply => (
           <CommentCard
-            key={cm.id}
-            comment={cm}
-            likedIds={likedCommentIds}
-            repostedIds={repostedCommentIds}
-            savedIds={savedCommentIds}
+            key={reply.id}
+            comment={reply}
+            likedIds={likedIds}
+            repostedIds={repostedIds}
+            savedIds={savedIds}
             onToggleLike={handleToggleLike}
             onToggleRepost={handleToggleRepost}
             onToggleSave={handleToggleSave}
             onReplyAdded={handleReplyAdded}
-            onDeleted={handleCommentDeleted}
+            onDeleted={handleDeleted}
             onProfilePress={(userId) => navigation.navigate('Profile', { userId })}
-            onPress={(commentId) => navigation.navigate('CommentDetail', { commentId })}
+            onPress={(commentId) => navigation.push('CommentDetail', { commentId })}
+            isReply
           />
         ))}
 
-        {rootComments.length === 0 && (
+        {replies.length === 0 && (
           <Text style={{ color: c.textMuted, fontSize: 14, textAlign: 'center', padding: 20 }}>
             {t('no_comments')}
           </Text>
         )}
       </ScrollView>
 
-      {canComment ? (
-        <View style={[styles.commentInputArea, { backgroundColor: c.bgSecondary, borderTopColor: c.border }]}>
+      {canReply ? (
+        <View style={[styles.inputArea, { backgroundColor: c.bgSecondary, borderTopColor: c.border }]}>
           {mediaUri && (
             <View style={styles.mediaPreviewRow}>
               <Image source={{ uri: mediaUri }} style={styles.mediaPreview} />
@@ -234,21 +274,21 @@ export default function PostDetailScreen({ route, navigation }: any) {
               </TouchableOpacity>
             </View>
           )}
-          <View style={styles.commentInputRow}>
+          <View style={styles.inputRow}>
             <TouchableOpacity onPress={pickImage} style={styles.addMediaBtn}>
               <Text style={{ color: colors.teal, fontSize: 18, fontWeight: '700' }}>+</Text>
             </TouchableOpacity>
             <TextInput
               style={[styles.input, { backgroundColor: c.bgInput, color: c.text }]}
-              placeholder={t('write_comment')}
+              placeholder={t('comment_reply_placeholder')}
               placeholderTextColor={c.textMuted}
-              value={commentText}
-              onChangeText={setCommentText}
+              value={replyText}
+              onChangeText={setReplyText}
               editable={!sending}
             />
             <TouchableOpacity
               style={[styles.sendBtn, { backgroundColor: hasContent && !sending ? colors.teal : c.bgInput }]}
-              onPress={handleComment}
+              onPress={handleSendReply}
               disabled={!hasContent || sending}
             >
               {sending ? (
@@ -261,10 +301,10 @@ export default function PostDetailScreen({ route, navigation }: any) {
         </View>
       ) : !isLoggedIn ? (
         <TouchableOpacity
-          style={[styles.commentInputArea, { backgroundColor: c.bgSecondary, borderTopColor: c.border, justifyContent: 'center', paddingVertical: 16 }]}
+          style={[styles.inputArea, { backgroundColor: c.bgSecondary, borderTopColor: c.border, justifyContent: 'center', paddingVertical: 16 }]}
           onPress={() => requireAuth()}
         >
-          <Text style={{ color: c.textMuted, fontSize: 14, textAlign: 'center' }}>{t('write_comment')}</Text>
+          <Text style={{ color: c.textMuted, fontSize: 14, textAlign: 'center' }}>{t('comment_reply_placeholder')}</Text>
         </TouchableOpacity>
       ) : null}
     </KeyboardAvoidingView>
@@ -274,13 +314,13 @@ export default function PostDetailScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingTop: 54, paddingBottom: 14, paddingHorizontal: 16, borderBottomWidth: 1 },
-  commentsSection: { paddingHorizontal: 16, paddingTop: 16 },
-  commentsTitle: { fontSize: 17, fontWeight: '600', marginBottom: 4 },
-  commentInputArea: { borderTopWidth: 1, paddingBottom: 30 },
+  repliesSection: { paddingHorizontal: 16, paddingTop: 16 },
+  repliesTitle: { fontSize: 17, fontWeight: '600', marginBottom: 4 },
+  inputArea: { borderTopWidth: 1, paddingBottom: 30 },
   mediaPreviewRow: { paddingHorizontal: 12, paddingTop: 10 },
   mediaPreview: { width: 72, height: 72, borderRadius: 10 },
   mediaRemove: { position: 'absolute', top: 14, left: 60, width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-  commentInputRow: { flexDirection: 'row', alignItems: 'center', padding: 10, gap: 8 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', padding: 10, gap: 8 },
   addMediaBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
