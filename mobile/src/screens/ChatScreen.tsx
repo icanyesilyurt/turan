@@ -1,39 +1,92 @@
-import React, { useState, useRef } from 'react'
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from 'react-native'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
-import { Conversation } from '../types'
+import { getMessages, sendMessage, getOrCreateConversation, markConversationRead } from '../services/messageService'
+import { DirectMessage, User } from '../types'
+
+function getInitials(name: string): string {
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+}
 
 export default function ChatScreen({ route, navigation }: any) {
-  const conversation: Conversation = route.params.conversation
-  const { t, theme, user, messages, setMessages } = useApp()
+  const { conversationId: initialConvId, otherUser, otherUserId } = route.params
+  const { t, theme, refreshUnreadDmCount } = useApp()
+  const { profile } = useAuth()
   const c = getTheme(theme)
   const [text, setText] = useState('')
+  const [messages, setMessages] = useState<DirectMessage[]>([])
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [conversationId, setConversationId] = useState<string | null>(initialConvId ?? null)
   const flatListRef = useRef<FlatList>(null)
 
-  const chatMessages = messages
-    .filter(m =>
-      (m.from_user_id === user?.id && m.to_user_id === conversation.other_user.id) ||
-      (m.from_user_id === conversation.other_user.id && m.to_user_id === user?.id)
-    )
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  const displayName = otherUser?.display_name ?? ''
 
-  const handleSend = () => {
-    if (!text.trim() || !user) return
-    const newMsg = {
-      id: `dm${Date.now()}`,
-      from_user_id: user.id,
-      to_user_id: conversation.other_user.id,
-      text: text.trim(),
-      created_at: new Date().toISOString(),
-      is_read: false,
+  const loadMessages = useCallback(async () => {
+    if (!conversationId) {
+      setLoading(false)
+      return
     }
-    setMessages(prev => [...prev, newMsg])
+    try {
+      const data = await getMessages(conversationId)
+      setMessages(data)
+      if (profile) {
+        markConversationRead(conversationId, profile.id).then(() => refreshUnreadDmCount())
+      }
+    } catch {}
+    setLoading(false)
+  }, [conversationId, profile?.id])
+
+  useEffect(() => {
+    loadMessages()
+  }, [loadMessages])
+
+  useEffect(() => {
+    if (!conversationId && !initialConvId && profile && otherUserId) {
+      getOrCreateConversation(profile.id, otherUserId)
+        .then(id => setConversationId(id))
+        .catch(() => setLoading(false))
+    }
+  }, [profile?.id, otherUserId])
+
+  const handleSend = async () => {
+    if (!text.trim() || !profile) return
+    const trimmed = text.trim()
+
+    let convId = conversationId
+    if (!convId) {
+      if (!otherUserId) return
+      try {
+        convId = await getOrCreateConversation(profile.id, otherUserId)
+        setConversationId(convId)
+      } catch { return }
+    }
+
+    const optimistic: DirectMessage = {
+      id: `temp_${Date.now()}`,
+      conversation_id: convId,
+      from_user_id: profile.id,
+      text: trimmed,
+      created_at: new Date().toISOString(),
+    }
+    setMessages(prev => [...prev, optimistic])
     setText('')
     setTimeout(() => flatListRef.current?.scrollToEnd(), 100)
+
+    setSending(true)
+    try {
+      const real = await sendMessage(convId, profile.id, trimmed)
+      setMessages(prev => prev.map(m => m.id === optimistic.id ? real : m))
+    } catch (err: any) {
+      console.error('[ChatScreen] sendMessage error:', err?.message ?? err)
+      setMessages(prev => prev.filter(m => m.id !== optimistic.id))
+    }
+    setSending(false)
   }
 
-  const isMine = (fromId: string) => fromId === user?.id
+  const isMine = (fromId: string) => fromId === profile?.id
 
   return (
     <KeyboardAvoidingView
@@ -45,39 +98,55 @@ export default function ChatScreen({ route, navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={{ color: colors.teal, fontSize: 16, fontWeight: '600' }}>← {t('back')}</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerName, { color: c.text }]}>{conversation.other_user.display_name}</Text>
+        <TouchableOpacity onPress={() => {
+          const uid = otherUser?.id ?? otherUserId
+          if (uid) navigation.navigate('Profile', { userId: uid })
+        }}>
+          <Text style={[styles.headerName, { color: c.text }]}>{displayName}</Text>
+        </TouchableOpacity>
         <View style={{ width: 50 }} />
       </View>
 
-      <FlatList
-        ref={flatListRef}
-        data={chatMessages}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <View style={[
-            styles.bubble,
-            isMine(item.from_user_id) ? styles.bubbleMine : styles.bubbleTheirs,
-            {
-              backgroundColor: isMine(item.from_user_id) ? colors.teal : c.bgCard,
-            }
-          ]}>
-            <Text style={[
-              styles.bubbleText,
-              { color: isMine(item.from_user_id) ? '#fff' : c.text }
+      {loading ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={colors.teal} />
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
+            <View style={[
+              styles.bubble,
+              isMine(item.from_user_id) ? styles.bubbleMine : styles.bubbleTheirs,
+              {
+                backgroundColor: isMine(item.from_user_id) ? colors.teal : c.bgCard,
+              }
             ]}>
-              {item.text}
-            </Text>
-            <Text style={[
-              styles.bubbleTime,
-              { color: isMine(item.from_user_id) ? 'rgba(255,255,255,0.6)' : c.textMuted }
-            ]}>
-              {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </View>
-        )}
-        contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-      />
+              <Text style={[
+                styles.bubbleText,
+                { color: isMine(item.from_user_id) ? '#fff' : c.text }
+              ]}>
+                {item.text}
+              </Text>
+              <Text style={[
+                styles.bubbleTime,
+                { color: isMine(item.from_user_id) ? 'rgba(255,255,255,0.6)' : c.textMuted }
+              ]}>
+                {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </View>
+          )}
+          contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', padding: 40 }}>
+              <Text style={{ color: c.textMuted, fontSize: 14 }}>{t('messages_empty')}</Text>
+            </View>
+          }
+        />
+      )}
 
       <View style={[styles.inputBar, { backgroundColor: c.bgSecondary, borderTopColor: c.border }]}>
         <TextInput
@@ -91,7 +160,7 @@ export default function ChatScreen({ route, navigation }: any) {
         <TouchableOpacity
           style={[styles.sendBtn, { backgroundColor: text.trim() ? colors.teal : c.bgInput }]}
           onPress={handleSend}
-          disabled={!text.trim()}
+          disabled={!text.trim() || sending}
         >
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>↑</Text>
         </TouchableOpacity>

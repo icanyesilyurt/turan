@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { AppLanguage, Theme, User, Conversation, DirectMessage } from '../types'
+import { AppLanguage, Theme, User } from '../types'
 import translations from '../i18n/translations'
-import { demoConversations, demoMessages } from '../data/demo'
+import { getUnreadConversationCount } from '../services/messageService'
 import { useAuth } from './AuthContext'
 import { getFollowCounts, getUnreadNotificationCount } from '../services/profileService'
 import {
@@ -30,11 +30,10 @@ interface AppContextType {
   isLoggedIn: boolean
   postsVersion: number
   incrementPostsVersion: () => void
-  conversations: Conversation[]
-  messages: DirectMessage[]
-  setMessages: React.Dispatch<React.SetStateAction<DirectMessage[]>>
   unreadNotifCount: number
   refreshUnreadCount: () => void
+  unreadDmCount: number
+  refreshUnreadDmCount: () => void
   savedPostIds: string[]
   likedPostIds: string[]
   repostedPostIds: string[]
@@ -53,8 +52,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { user: authUser, profile } = useAuth()
   const [language, setLanguageState] = useState<AppLanguage>('tr')
   const [theme, setThemeState] = useState<Theme>('dark')
-  const [conversations] = useState<Conversation[]>(demoConversations)
-  const [messages, setMessages] = useState<DirectMessage[]>(demoMessages)
   const [savedPostIds, setSavedPostIds] = useState<string[]>([])
   const [likedPostIds, setLikedPostIds] = useState<string[]>([])
   const [repostedPostIds, setRepostedPostIds] = useState<string[]>([])
@@ -62,6 +59,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false)
   const [followCountsState, setFollowCountsState] = useState({ followers: 0, following: 0 })
   const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+  const [unreadDmCount, setUnreadDmCount] = useState(0)
   const [postsVersion, setPostsVersion] = useState(0)
 
   const incrementPostsVersion = useCallback(() => setPostsVersion(v => v + 1), [])
@@ -70,6 +68,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!profile) {
       setFollowCountsState({ followers: 0, following: 0 })
       setUnreadNotifCount(0)
+      setUnreadDmCount(0)
       setLikedPostIds([])
       setRepostedPostIds([])
       setSavedPostIds([])
@@ -80,6 +79,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .catch(() => {})
     getUnreadNotificationCount(profile.id)
       .then(setUnreadNotifCount)
+      .catch(() => {})
+    getUnreadConversationCount(profile.id)
+      .then(setUnreadDmCount)
       .catch(() => {})
     getUserInteractions(profile.id)
       .then(({ likedPostIds: l, repostedPostIds: r, savedPostIds: s }) => {
@@ -94,6 +96,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (profile) {
       getUnreadNotificationCount(profile.id)
         .then(setUnreadNotifCount)
+        .catch(() => {})
+    }
+  }, [profile?.id])
+
+  const refreshUnreadDmCount = useCallback(() => {
+    if (profile) {
+      getUnreadConversationCount(profile.id)
+        .then(setUnreadDmCount)
         .catch(() => {})
     }
   }, [profile?.id])
@@ -204,9 +214,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       language, setLanguage, theme, setTheme, t,
       user, isLoggedIn: !!user,
       postsVersion, incrementPostsVersion,
-      conversations, messages, setMessages,
       unreadNotifCount,
       refreshUnreadCount,
+      unreadDmCount,
+      refreshUnreadDmCount,
       savedPostIds, likedPostIds, repostedPostIds,
       toggleLikePost, repostPost, unrepostPost, toggleSavePost,
       drafts, addDraft, removeDraft,

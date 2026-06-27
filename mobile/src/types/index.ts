@@ -99,11 +99,10 @@ export type FeedItem =
 
 export interface DirectMessage {
   id: string
+  conversation_id: string
   from_user_id: string
-  to_user_id: string
   text: string
   created_at: string
-  is_read: boolean
 }
 
 export interface Conversation {

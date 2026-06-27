@@ -28,6 +28,7 @@ import {
   createFollowNotification,
 } from '../services/profileService'
 import { getProfileFeed } from '../services/postService'
+import { getOrCreateConversation } from '../services/messageService'
 import { getUserComments, getUserCommentInteractions } from '../services/interactionService'
 import { Profile, User, CommunityComment, FeedItem } from '../types'
 import PostCard from '../components/PostCard'
@@ -551,26 +552,40 @@ export default function ProfileScreen({ route, navigation }: any) {
               <Text style={{ color: c.text, fontWeight: '600', fontSize: 14 }}>{t('profile_edit')}</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              style={[
-                styles.followBtn,
-                {
-                  backgroundColor: following ? 'transparent' : colors.teal,
-                  borderWidth: following ? 1.5 : 0,
-                  borderColor: following ? c.border : undefined,
-                },
-              ]}
-              onPress={handleFollowToggle}
-              disabled={followLoading}
-            >
-              {followLoading ? (
-                <ActivityIndicator size="small" color={following ? c.text : '#fff'} />
-              ) : (
-                <Text style={{ color: following ? c.text : '#fff', fontWeight: '600', fontSize: 14 }}>
-                  {following ? t('unfollow') : t('follow')}
-                </Text>
-              )}
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[
+                  styles.followBtn,
+                  {
+                    backgroundColor: following ? 'transparent' : colors.teal,
+                    borderWidth: following ? 1.5 : 0,
+                    borderColor: following ? c.border : undefined,
+                  },
+                ]}
+                onPress={handleFollowToggle}
+                disabled={followLoading}
+              >
+                {followLoading ? (
+                  <ActivityIndicator size="small" color={following ? c.text : '#fff'} />
+                ) : (
+                  <Text style={{ color: following ? c.text : '#fff', fontWeight: '600', fontSize: 14 }}>
+                    {following ? t('unfollow') : t('follow')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.editBtn, { borderColor: c.border }]}
+                onPress={async () => {
+                  if (!currentProfile || !profileUser) return
+                  try {
+                    const convId = await getOrCreateConversation(currentProfile.id, profileUser.id)
+                    navigation.navigate('Chat', { conversationId: convId, otherUser: profileUser, otherUserId: profileUser.id })
+                  } catch {}
+                }}
+              >
+                <Text style={{ color: c.text, fontWeight: '600', fontSize: 14 }}>✉</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 

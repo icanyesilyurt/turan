@@ -1,4 +1,4 @@
-import { User, CommunityPost, CommunityComment, Conversation, DirectMessage, AppNotification } from '../types'
+import { User, CommunityPost, CommunityComment, AppNotification } from '../types'
 
 export const demoUser: User = {
   id: 'u1',
@@ -153,28 +153,6 @@ export const demoComments: CommunityComment[] = [
   { id: 'cm2', post_id: 'op1', user_id: 'u3', user: demoUsers[2], text: 'Орхон жазбалары — біздің ортақ мұрамыз!', likes_count: 0, reposts_count: 0, replies_count: 0, created_at: '2024-06-24T11:30:00' },
   { id: 'cm3', post_id: 'fp1', user_id: 'u1', user: demoUsers[0], text: 'Nevruz tüm Türk dünyasının ortak bayramı. Kutlu olsun!', likes_count: 0, reposts_count: 0, replies_count: 0, created_at: '2024-06-24T09:45:00' },
   { id: 'cm4', post_id: 'ep1', user_id: 'u3', user: demoUsers[2], text: 'Қазақша да "Су" деп айтамыз. Ортақтығымыз айқын!', likes_count: 0, reposts_count: 0, replies_count: 0, created_at: '2024-06-24T12:00:00' },
-]
-
-export const demoConversations: Conversation[] = [
-  {
-    id: 'conv1', other_user: demoUsers[1],
-    last_message: 'Bakı\'ya geldiğinde buluşalım!',
-    last_message_at: '2024-06-24T14:30:00', unread_count: 2,
-  },
-  {
-    id: 'conv2', other_user: demoUsers[2],
-    last_message: 'Қазақстанға қош келдіңіз деп айтамын!',
-    last_message_at: '2024-06-23T18:00:00', unread_count: 0,
-  },
-]
-
-export const demoMessages: DirectMessage[] = [
-  { id: 'dm1', from_user_id: 'u2', to_user_id: 'u1', text: 'Salam! TURAN\'ı necə bəyənirsən?', created_at: '2024-06-24T14:00:00', is_read: true },
-  { id: 'dm2', from_user_id: 'u1', to_user_id: 'u2', text: 'Çok güzel bir platform! Kültürel paylaşımlar harika.', created_at: '2024-06-24T14:15:00', is_read: true },
-  { id: 'dm3', from_user_id: 'u2', to_user_id: 'u1', text: 'Bakı\'ya geldiğinde buluşalım!', created_at: '2024-06-24T14:30:00', is_read: false },
-  { id: 'dm4', from_user_id: 'u3', to_user_id: 'u1', text: 'Сәлем! Орхон жазбалары туралы жазбаңызды оқыдым.', created_at: '2024-06-23T17:30:00', is_read: true },
-  { id: 'dm5', from_user_id: 'u1', to_user_id: 'u3', text: 'Teşekkürler! Çok ilgimi çekiyor bu konu.', created_at: '2024-06-23T17:45:00', is_read: true },
-  { id: 'dm6', from_user_id: 'u3', to_user_id: 'u1', text: 'Қазақстанға қош келдіңіз деп айтамын!', created_at: '2024-06-23T18:00:00', is_read: true },
 ]
 
 export const demoNotifications: AppNotification[] = [

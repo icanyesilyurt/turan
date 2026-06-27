@@ -42,6 +42,7 @@ function SearchStack() {
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
       <Stack.Screen name="CommentDetail" component={CommentDetailScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
     </Stack.Navigator>
   )
 }
@@ -53,6 +54,7 @@ function NotificationsStack() {
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
       <Stack.Screen name="CommentDetail" component={CommentDetailScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
     </Stack.Navigator>
   )
 }
@@ -62,6 +64,7 @@ function MessagesStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MessagesMain" component={MessagesScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
     </Stack.Navigator>
   )
 }
@@ -74,12 +77,10 @@ const tabIcons: Record<string, string> = {
 }
 
 export default function AppNavigator() {
-  const { t, theme, conversations, unreadNotifCount, isLoggedIn } = useApp()
+  const { t, theme, unreadNotifCount, unreadDmCount, isLoggedIn } = useApp()
   const c = getTheme(theme)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [composeOpen, setComposeOpen] = useState(false)
-
-  const totalUnread = conversations.reduce((sum, conv) => sum + conv.unread_count, 0)
 
   const handleDrawerNavigate = (screen: string, navigation: any) => {
     if (screen === 'Profile') {
@@ -111,7 +112,7 @@ export default function AppNavigator() {
             <Text style={{ fontSize: 22, color }}>{tabIcons[route.name]}</Text>
           ),
           tabBarBadge:
-            route.name === 'MessagesTab' && totalUnread > 0 ? totalUnread
+            route.name === 'MessagesTab' && unreadDmCount > 0 ? unreadDmCount
             : route.name === 'NotificationsTab' && unreadNotifCount > 0 ? unreadNotifCount
             : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.teal, color: '#fff', fontSize: 11 },
@@ -126,6 +127,7 @@ export default function AppNavigator() {
               <Stack.Screen name="PostDetail" component={PostDetailScreen} />
               <Stack.Screen name="CommentDetail" component={CommentDetailScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="Chat" component={ChatScreen} />
               <Stack.Screen name="Saved" component={SavedScreen} />
               <Stack.Screen name="Settings" component={SettingsScreen} />
               <Stack.Screen name="Drafts" component={DraftsScreen} />

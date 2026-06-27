@@ -139,6 +139,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     comment_reply_placeholder: 'Yanit yaz...',
     replied_to_post: 'Gonderiye yanit verdi',
     replied_to_comment: 'Yoruma yanit verdi',
+    dm_delete_title: 'Sohbeti Sil',
+    dm_delete_confirm: 'Bu sohbet her iki taraf icin de silinecek. Devam edilsin mi?',
+    dm_delete_button: 'Sohbeti Sil',
   },
   az: {
     tab_home: 'Ana Sehife',
@@ -278,6 +281,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     comment_reply_placeholder: 'Cavab yaz...',
     replied_to_post: 'Paylasima cavab verdi',
     replied_to_comment: 'Serhe cavab verdi',
+    dm_delete_title: 'Sohbeti Sil',
+    dm_delete_confirm: 'Bu sohbet her iki teref ucun de silinecek. Davam edilsinmi?',
+    dm_delete_button: 'Sohbeti Sil',
   },
   kk: {
     tab_home: 'Basty bet',
@@ -417,6 +423,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     comment_reply_placeholder: 'Jauap jazу...',
     replied_to_post: 'Zharylymdyga jauap berdi',
     replied_to_comment: 'Pikyrge jauap berdi',
+    dm_delete_title: 'Suhbatty Joju',
+    dm_delete_confirm: 'Bul suhbat eki jaq ushin de joiylady. Jalghastyrylsyn ba?',
+    dm_delete_button: 'Suhbatty Joju',
   },
   ky: {
     tab_home: 'Bashy bet',
@@ -556,6 +565,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     comment_reply_placeholder: 'Joop jazuu...',
     replied_to_post: 'Postko joop berdi',
     replied_to_comment: 'Pikyrge joop berdi',
+    dm_delete_title: 'Suhbatty Ochuruu',
+    dm_delete_confirm: 'Bul suhbat eki tarap uchun da ochurulat. Ulantylasynby?',
+    dm_delete_button: 'Suhbatty Ochuruu',
   },
   uz: {
     tab_home: 'Bosh sahifa',
@@ -695,6 +707,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     comment_reply_placeholder: "Javob yozing...",
     replied_to_post: "Postga javob berdi",
     replied_to_comment: "Izohga javob berdi",
+    dm_delete_title: "Suhbatni o'chirish",
+    dm_delete_confirm: "Bu suhbat ikkala tomon uchun ham o'chiriladi. Davom etilsinmi?",
+    dm_delete_button: "Suhbatni o'chirish",
   },
   tk: {
     tab_home: 'Bash sahypa',
@@ -834,6 +849,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     comment_reply_placeholder: 'Jogap yaz...',
     replied_to_post: 'Posta jogap berdi',
     replied_to_comment: 'Teswire jogap berdi',
+    dm_delete_title: 'Sohbetdesligi Poz',
+    dm_delete_confirm: 'Bu sohbetdeslik iki tarap ucin hem pozular. Dowam edilsinmi?',
+    dm_delete_button: 'Sohbetdesligi Poz',
   },
 }
 
