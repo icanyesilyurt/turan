@@ -142,20 +142,13 @@ export async function addComment(
   if (parentCommentId) row.parent_comment_id = parentCommentId
   if (imageUrl) row.image_url = imageUrl
 
-  console.log('[addComment] inserting', row)
-
   const { data, error } = await supabase
     .from('post_comments')
     .insert(row)
     .select(COMMENT_SELECT)
     .single()
 
-  if (error) {
-    console.error('[addComment] ERROR', error)
-    throw error
-  }
-
-  console.log('[addComment] success', data?.id)
+  if (error) throw error
   return mapComment(data)
 }
 
@@ -256,37 +249,29 @@ export async function toggleCommentLike(
   commentId: string,
   userId: string,
 ): Promise<{ liked: boolean; count: number }> {
-  console.log('[toggleCommentLike] start', { commentId, userId })
-
-  const { data: existing, error: selErr } = await supabase
+  const { data: existing } = await supabase
     .from('comment_likes')
     .select('id')
     .eq('comment_id', commentId)
     .eq('user_id', userId)
     .maybeSingle()
 
-  if (selErr) {
-    console.error('[toggleCommentLike] select error', selErr)
-    throw selErr
-  }
-
   if (existing) {
     const { error } = await supabase.from('comment_likes').delete().eq('id', existing.id)
-    if (error) { console.error('[toggleCommentLike] delete error', error); throw error }
+    if (error) throw error
   } else {
     const { error } = await supabase.from('comment_likes').insert({ comment_id: commentId, user_id: userId })
-    if (error) { console.error('[toggleCommentLike] insert error', error); throw error }
+    if (error) throw error
   }
 
-  const { count, error: cntErr } = await supabase
-    .from('comment_likes')
-    .select('id', { count: 'exact', head: true })
-    .eq('comment_id', commentId)
+  const { data: comment, error: cErr } = await supabase
+    .from('post_comments')
+    .select('likes_count')
+    .eq('id', commentId)
+    .single()
 
-  if (cntErr) console.error('[toggleCommentLike] count error', cntErr)
-
-  console.log('[toggleCommentLike] done', { liked: !existing, count: count ?? 0 })
-  return { liked: !existing, count: count ?? 0 }
+  if (cErr) throw cErr
+  return { liked: !existing, count: comment.likes_count }
 }
 
 export async function getUserLikedCommentIds(userId: string): Promise<string[]> {
@@ -338,29 +323,21 @@ export async function toggleCommentSave(
   commentId: string,
   userId: string,
 ): Promise<{ saved: boolean }> {
-  console.log('[toggleCommentSave] start', { commentId, userId })
-
-  const { data: existing, error: selErr } = await supabase
+  const { data: existing } = await supabase
     .from('comment_saves')
     .select('id')
     .eq('comment_id', commentId)
     .eq('user_id', userId)
     .maybeSingle()
 
-  if (selErr) {
-    console.error('[toggleCommentSave] select error', selErr)
-    throw selErr
-  }
-
   if (existing) {
     const { error } = await supabase.from('comment_saves').delete().eq('id', existing.id)
-    if (error) { console.error('[toggleCommentSave] delete error', error); throw error }
+    if (error) throw error
   } else {
     const { error } = await supabase.from('comment_saves').insert({ comment_id: commentId, user_id: userId })
-    if (error) { console.error('[toggleCommentSave] insert error', error); throw error }
+    if (error) throw error
   }
 
-  console.log('[toggleCommentSave] done', { saved: !existing })
   return { saved: !existing }
 }
 
@@ -369,24 +346,124 @@ export async function getUserCommentInteractions(userId: string): Promise<{
   repostedCommentIds: string[]
   savedCommentIds: string[]
 }> {
-  console.log('[getUserCommentInteractions] fetching for', userId)
   const [likes, reposts, saves] = await Promise.all([
     supabase.from('comment_likes').select('comment_id').eq('user_id', userId),
     supabase.from('comment_reposts').select('comment_id').eq('user_id', userId),
     supabase.from('comment_saves').select('comment_id').eq('user_id', userId),
   ])
 
-  if (likes.error) console.error('[getUserCommentInteractions] likes error', likes.error)
-  if (reposts.error) console.error('[getUserCommentInteractions] reposts error', reposts.error)
-  if (saves.error) console.error('[getUserCommentInteractions] saves error', saves.error)
-
-  const result = {
+  return {
     likedCommentIds: (likes.data ?? []).map(r => r.comment_id),
     repostedCommentIds: (reposts.data ?? []).map(r => r.comment_id),
     savedCommentIds: (saves.data ?? []).map(r => r.comment_id),
   }
-  console.log('[getUserCommentInteractions] result', { liked: result.likedCommentIds.length, reposted: result.repostedCommentIds.length, saved: result.savedCommentIds.length })
-  return result
+}
+
+export async function getSavedCommentIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('comment_saves')
+    .select('comment_id')
+    .eq('user_id', userId)
+
+  if (error) throw error
+  return (data ?? []).map(r => r.comment_id)
+}
+
+export async function getCommentsByIds(ids: string[]): Promise<CommunityComment[]> {
+  if (ids.length === 0) return []
+
+  const { data, error } = await supabase
+    .from('post_comments')
+    .select(COMMENT_SELECT)
+    .in('id', ids)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []).map(mapComment)
+}
+
+export async function getCommentRepostsByUser(
+  userId: string,
+  limit = 30,
+): Promise<{ comment: CommunityComment; repost_created_at: string }[]> {
+  const { data: repostRows, error: rErr } = await supabase
+    .from('comment_reposts')
+    .select('comment_id, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (rErr) throw rErr
+  if (!repostRows || repostRows.length === 0) return []
+
+  const commentIds = repostRows.map(r => r.comment_id)
+  const { data: commentsData, error: cErr } = await supabase
+    .from('post_comments')
+    .select(COMMENT_SELECT)
+    .in('id', commentIds)
+
+  if (cErr) throw cErr
+
+  const commentMap = new Map<string, CommunityComment>()
+  for (const row of commentsData ?? []) {
+    commentMap.set(row.id, mapComment(row))
+  }
+
+  const results: { comment: CommunityComment; repost_created_at: string }[] = []
+  for (const r of repostRows) {
+    const comment = commentMap.get(r.comment_id)
+    if (comment) {
+      results.push({ comment, repost_created_at: r.created_at })
+    }
+  }
+  return results
+}
+
+export async function getFollowingCommentReposts(
+  userIds: string[],
+  limit = 30,
+): Promise<{ comment: CommunityComment; repost_created_at: string; reposted_by: { display_name: string; username: string } }[]> {
+  if (userIds.length === 0) return []
+
+  const { data: repostRows, error: rErr } = await supabase
+    .from('comment_reposts')
+    .select('comment_id, created_at, user_id')
+    .in('user_id', userIds)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (rErr) throw rErr
+  if (!repostRows || repostRows.length === 0) return []
+
+  const commentIds = repostRows.map(r => r.comment_id)
+  const profileIds = [...new Set(repostRows.map(r => r.user_id))]
+
+  const [commentsRes, profilesRes] = await Promise.all([
+    supabase.from('post_comments').select(COMMENT_SELECT).in('id', commentIds),
+    supabase.from('profiles').select('id, display_name, username').in('id', profileIds),
+  ])
+
+  if (commentsRes.error) throw commentsRes.error
+
+  const commentMap = new Map<string, CommunityComment>()
+  for (const row of commentsRes.data ?? []) {
+    commentMap.set(row.id, mapComment(row))
+  }
+
+  const profileMap = new Map<string, { display_name: string; username: string }>()
+  for (const p of profilesRes.data ?? []) {
+    profileMap.set(p.id, { display_name: p.display_name, username: p.username })
+  }
+
+  const results: { comment: CommunityComment; repost_created_at: string; reposted_by: { display_name: string; username: string } }[] = []
+  for (const r of repostRows) {
+    const comment = commentMap.get(r.comment_id)
+    const profile = profileMap.get(r.user_id)
+    if (comment && profile) {
+      results.push({ comment, repost_created_at: r.created_at, reposted_by: profile })
+    }
+  }
+  return results
 }
 
 export async function createCommentNotification(

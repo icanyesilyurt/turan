@@ -10,8 +10,9 @@ import {
   createCommentNotification,
   createInteractionNotification,
 } from '../services/interactionService'
+import { getPostById } from '../services/postService'
 import { supabase } from '../lib/supabase'
-import { CommunityComment } from '../types'
+import { CommunityPost, CommunityComment } from '../types'
 import CommentCard from '../components/CommentCard'
 
 const COMMENT_SELECT = '*, author:profiles!post_comments_user_id_fkey(*)'
@@ -45,6 +46,8 @@ export default function CommentDetailScreen({ route, navigation }: any) {
   const { profile, requireAuth } = useAuth()
   const c = getTheme(theme)
 
+  const [contextPost, setContextPost] = useState<CommunityPost | null>(null)
+  const [ancestorComments, setAncestorComments] = useState<CommunityComment[]>([])
   const [parentComment, setParentComment] = useState<CommunityComment | null>(null)
   const [replies, setReplies] = useState<CommunityComment[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,11 +74,30 @@ export default function CommentDetailScreen({ route, navigation }: any) {
         return
       }
 
-      const { data: repliesData } = await supabase
-        .from('post_comments')
-        .select(COMMENT_SELECT)
-        .eq('parent_comment_id', commentId)
-        .order('created_at', { ascending: true })
+      const comment = mapComment(commentData)
+
+      const [repliesRes, post] = await Promise.all([
+        supabase
+          .from('post_comments')
+          .select(COMMENT_SELECT)
+          .eq('parent_comment_id', commentId)
+          .order('created_at', { ascending: true }),
+        getPostById(comment.post_id).catch(() => null),
+      ])
+
+      const ancestors: CommunityComment[] = []
+      let currentParentId = comment.parent_comment_id
+      while (currentParentId) {
+        const { data: ancestorData } = await supabase
+          .from('post_comments')
+          .select(COMMENT_SELECT)
+          .eq('id', currentParentId)
+          .single()
+        if (!ancestorData) break
+        const ancestor = mapComment(ancestorData)
+        ancestors.unshift(ancestor)
+        currentParentId = ancestor.parent_comment_id
+      }
 
       let interactions = { likedCommentIds: [] as string[], repostedCommentIds: [] as string[], savedCommentIds: [] as string[] }
       if (profile) {
@@ -83,8 +105,10 @@ export default function CommentDetailScreen({ route, navigation }: any) {
       }
 
       if (active) {
-        setParentComment(mapComment(commentData))
-        setReplies((repliesData ?? []).map(mapComment))
+        setContextPost(post)
+        setAncestorComments(ancestors)
+        setParentComment(comment)
+        setReplies((repliesRes.data ?? []).map(mapComment))
         setLikedIds(interactions.likedCommentIds)
         setRepostedIds(interactions.repostedCommentIds)
         setSavedIds(interactions.savedCommentIds)
@@ -219,6 +243,59 @@ export default function CommentDetailScreen({ route, navigation }: any) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
+        {contextPost && (
+          <TouchableOpacity
+            style={[styles.contextItem, { backgroundColor: c.bgSecondary, borderBottomColor: c.border }]}
+            onPress={() => navigation.navigate('PostDetail', { postId: contextPost.id })}
+          >
+            <View style={styles.contextLine}>
+              <View style={[styles.contextDot, { backgroundColor: colors.teal }]} />
+              <View style={[styles.contextConnector, { backgroundColor: c.border }]} />
+            </View>
+            <View style={styles.contextContent}>
+              {contextPost.user && (
+                <Text style={[styles.contextUser, { color: c.text }]} numberOfLines={1}>
+                  {contextPost.user.display_name}{' '}
+                  <Text style={{ color: c.textMuted, fontWeight: '400' }}>@{contextPost.user.username}</Text>
+                </Text>
+              )}
+              <Text style={[styles.contextText, { color: c.textSecondary }]} numberOfLines={2}>
+                {contextPost.text}
+              </Text>
+              {contextPost.image_url && (
+                <Text style={{ color: c.textMuted, fontSize: 12 }}>📷</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {ancestorComments.map(ac => (
+          <TouchableOpacity
+            key={ac.id}
+            style={[styles.contextItem, { backgroundColor: c.bgSecondary, borderBottomColor: c.border }]}
+            onPress={() => navigation.push('CommentDetail', { commentId: ac.id })}
+          >
+            <View style={styles.contextLine}>
+              <View style={[styles.contextDot, { backgroundColor: c.textMuted }]} />
+              <View style={[styles.contextConnector, { backgroundColor: c.border }]} />
+            </View>
+            <View style={styles.contextContent}>
+              {ac.user && (
+                <Text style={[styles.contextUser, { color: c.text }]} numberOfLines={1}>
+                  {ac.user.display_name}{' '}
+                  <Text style={{ color: c.textMuted, fontWeight: '400' }}>@{ac.user.username}</Text>
+                </Text>
+              )}
+              <Text style={[styles.contextText, { color: c.textSecondary }]} numberOfLines={2}>
+                {ac.text}
+              </Text>
+              {ac.image_url && (
+                <Text style={{ color: c.textMuted, fontSize: 12 }}>📷</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
+
         <CommentCard
           comment={parentComment}
           likedIds={likedIds}
@@ -314,6 +391,13 @@ export default function CommentDetailScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingTop: 54, paddingBottom: 14, paddingHorizontal: 16, borderBottomWidth: 1 },
+  contextItem: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
+  contextLine: { width: 20, alignItems: 'center', marginRight: 8 },
+  contextDot: { width: 8, height: 8, borderRadius: 4, marginTop: 4 },
+  contextConnector: { width: 2, flex: 1, marginTop: 4 },
+  contextContent: { flex: 1 },
+  contextUser: { fontSize: 13, fontWeight: '600', marginBottom: 2 },
+  contextText: { fontSize: 13, lineHeight: 18 },
   repliesSection: { paddingHorizontal: 16, paddingTop: 16 },
   repliesTitle: { fontSize: 17, fontWeight: '600', marginBottom: 4 },
   inputArea: { borderTopWidth: 1, paddingBottom: 30 },

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
-import { CommunityPost, Profile } from '../types'
+import { CommunityPost, FeedItem, Profile } from '../types'
+import { getCommentRepostsByUser, getFollowingCommentReposts } from './interactionService'
 
 function mapRow(row: any, rootCommentCount?: number): CommunityPost {
   const p = row.author as Profile | null
@@ -101,7 +102,7 @@ export async function getOfficialPosts(limit = 30): Promise<CommunityPost[]> {
 export async function getFollowingPosts(
   userId: string,
   limit = 30,
-): Promise<CommunityPost[]> {
+): Promise<FeedItem[]> {
   const { data: follows, error: fErr } = await supabase
     .from('follows')
     .select('following_id')
@@ -112,7 +113,7 @@ export async function getFollowingPosts(
   const ids = follows?.map(f => f.following_id) ?? []
   if (ids.length === 0) return []
 
-  const [postsRes, repostsRes] = await Promise.all([
+  const [postsRes, repostsRes, commentReposts] = await Promise.all([
     supabase
       .from('posts')
       .select(POST_SELECT)
@@ -125,13 +126,14 @@ export async function getFollowingPosts(
       .in('user_id', ids)
       .order('created_at', { ascending: false })
       .limit(limit),
+    getFollowingCommentReposts(ids, limit),
   ])
 
   if (postsRes.error) throw postsRes.error
   if (repostsRes.error) throw repostsRes.error
 
-  const entries: { post: CommunityPost; sortDate: string }[] =
-    (postsRes.data ?? []).map(row => ({ post: mapRow(row), sortDate: row.created_at }))
+  const entries: FeedItem[] =
+    (postsRes.data ?? []).map(row => ({ type: 'post' as const, data: mapRow(row), sortDate: row.created_at }))
 
   const repostRows = repostsRes.data ?? []
   if (repostRows.length > 0) {
@@ -155,21 +157,37 @@ export async function getFollowingPosts(
       if (!repostRow) continue
       const post = mapRow(row)
       post.reposted_by = profileMap.get(repostRow.user_id)
-      entries.push({ post, sortDate: repostRow.created_at })
+      entries.push({ type: 'post', data: post, sortDate: repostRow.created_at })
     }
+  }
+
+  for (const cr of commentReposts) {
+    cr.comment.reposted_by = cr.reposted_by
+    entries.push({ type: 'comment_repost', data: cr.comment, sortDate: cr.repost_created_at })
   }
 
   entries.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime())
 
   const seen = new Set<string>()
-  const deduped: CommunityPost[] = []
+  const deduped: FeedItem[] = []
   for (const entry of entries) {
-    if (!seen.has(entry.post.id)) {
-      seen.add(entry.post.id)
-      deduped.push(entry.post)
+    const key = `${entry.type}-${entry.data.id}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      deduped.push(entry)
     }
   }
-  return withRootCommentCounts(deduped.slice(0, limit))
+
+  const result = deduped.slice(0, limit)
+  const postItems = result.filter((e): e is FeedItem & { type: 'post' } => e.type === 'post')
+  const postsWithCounts = await withRootCommentCounts(postItems.map(e => e.data))
+  const countMap = new Map(postsWithCounts.map(p => [p.id, p]))
+  return result.map(e => {
+    if (e.type === 'post') {
+      return { ...e, data: countMap.get(e.data.id) ?? e.data }
+    }
+    return e
+  })
 }
 
 export async function getExplorePosts(limit = 30): Promise<CommunityPost[]> {
@@ -201,8 +219,8 @@ export async function getProfilePosts(
 export async function getProfileFeed(
   userId: string,
   limit = 30,
-): Promise<CommunityPost[]> {
-  const [ownRes, repostRes, profileRes] = await Promise.all([
+): Promise<FeedItem[]> {
+  const [ownRes, repostRes, profileRes, commentReposts] = await Promise.all([
     supabase
       .from('posts')
       .select(POST_SELECT)
@@ -220,13 +238,14 @@ export async function getProfileFeed(
       .select('display_name, username')
       .eq('id', userId)
       .single(),
+    getCommentRepostsByUser(userId, limit),
   ])
 
   if (ownRes.error) throw ownRes.error
   if (repostRes.error) throw repostRes.error
 
-  const entries: { post: CommunityPost; sortDate: string }[] =
-    (ownRes.data ?? []).map(row => ({ post: mapRow(row), sortDate: row.created_at }))
+  const entries: FeedItem[] =
+    (ownRes.data ?? []).map(row => ({ type: 'post' as const, data: mapRow(row), sortDate: row.created_at }))
 
   const repostRows = repostRes.data ?? []
   if (repostRows.length > 0) {
@@ -246,26 +265,44 @@ export async function getProfileFeed(
       const repostRow = repostRows.find(r => r.post_id === row.id)
       const post = mapRow(row)
       post.reposted_by = repostBy
-      entries.push({ post, sortDate: repostRow?.created_at ?? row.created_at })
+      entries.push({ type: 'post', data: post, sortDate: repostRow?.created_at ?? row.created_at })
     }
   }
 
+  const repostBy = profileRes.data
+    ? { display_name: profileRes.data.display_name, username: profileRes.data.username }
+    : undefined
+  for (const cr of commentReposts) {
+    cr.comment.reposted_by = repostBy
+    entries.push({ type: 'comment_repost', data: cr.comment, sortDate: cr.repost_created_at })
+  }
   entries.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime())
 
   const seen = new Set<string>()
-  const pinned: CommunityPost[] = []
-  const regular: CommunityPost[] = []
+  const pinned: FeedItem[] = []
+  const regular: FeedItem[] = []
   for (const entry of entries) {
-    if (!seen.has(entry.post.id)) {
-      seen.add(entry.post.id)
-      if (entry.post.pinned_at && !entry.post.reposted_by) {
-        pinned.push(entry.post)
+    const key = `${entry.type}-${entry.data.id}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      if (entry.type === 'post' && entry.data.pinned_at && !entry.data.reposted_by) {
+        pinned.push(entry)
       } else {
-        regular.push(entry.post)
+        regular.push(entry)
       }
     }
   }
-  return withRootCommentCounts([...pinned, ...regular].slice(0, limit))
+
+  const result = [...pinned, ...regular].slice(0, limit)
+  const postItems = result.filter((e): e is FeedItem & { type: 'post' } => e.type === 'post')
+  const postsWithCounts = await withRootCommentCounts(postItems.map(e => e.data))
+  const countMap = new Map(postsWithCounts.map(p => [p.id, p]))
+  return result.map(e => {
+    if (e.type === 'post') {
+      return { ...e, data: countMap.get(e.data.id) ?? e.data }
+    }
+    return e
+  })
 }
 
 export async function getPostById(

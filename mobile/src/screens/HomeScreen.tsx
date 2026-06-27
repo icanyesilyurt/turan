@@ -4,8 +4,10 @@ import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
 import { getOfficialPosts, getFollowingPosts, getExplorePosts } from '../services/postService'
-import { CommunityPost } from '../types'
+import { getUserCommentInteractions } from '../services/interactionService'
+import { CommunityPost, FeedItem } from '../types'
 import PostCard from '../components/PostCard'
+import CommentCard from '../components/CommentCard'
 
 function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -18,26 +20,41 @@ export default function HomeScreen({ navigation, onOpenDrawer }: any) {
   const { profile: currentProfile } = useAuth()
   const c = getTheme(theme)
   const [activeTab, setActiveTab] = useState<HomeTab>('turan')
-  const [posts, setPosts] = useState<CommunityPost[]>([])
+  const [feedItems, setFeedItems] = useState<FeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [likedCommentIds, setLikedCommentIds] = useState<string[]>([])
+  const [repostedCommentIds, setRepostedCommentIds] = useState<string[]>([])
+  const [savedCommentIds, setSavedCommentIds] = useState<string[]>([])
 
   const loadPosts = useCallback(async (showLoader = true) => {
     if (showLoader) setLoading(true)
     try {
-      let data: CommunityPost[]
+      let items: FeedItem[]
       if (activeTab === 'turan') {
-        data = await getOfficialPosts()
+        const data = await getOfficialPosts()
+        items = data.map(p => ({ type: 'post' as const, data: p, sortDate: p.created_at }))
       } else if (activeTab === 'following') {
-        if (!currentProfile) { setPosts([]); setLoading(false); return }
-        data = await getFollowingPosts(currentProfile.id)
+        if (!currentProfile) { setFeedItems([]); setLoading(false); return }
+        items = await getFollowingPosts(currentProfile.id)
       } else {
-        data = await getExplorePosts()
+        const data = await getExplorePosts()
+        items = data.map(p => ({ type: 'post' as const, data: p, sortDate: p.created_at }))
       }
-      setPosts(data)
+      setFeedItems(items)
+
+      if (currentProfile) {
+        getUserCommentInteractions(currentProfile.id)
+          .then(ci => {
+            setLikedCommentIds(ci.likedCommentIds)
+            setRepostedCommentIds(ci.repostedCommentIds)
+            setSavedCommentIds(ci.savedCommentIds)
+          })
+          .catch(() => {})
+      }
     } catch (err) {
       console.warn('[HomeScreen] load error:', err)
-      setPosts([])
+      setFeedItems([])
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -104,15 +121,41 @@ export default function HomeScreen({ navigation, onOpenDrawer }: any) {
         </View>
       ) : (
         <FlatList
-          data={posts}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <PostCard
-              post={item}
-              onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-              onProfilePress={(userId) => navigation.navigate('Profile', { userId })}
-            />
-          )}
+          data={feedItems}
+          keyExtractor={item => `${item.type}-${item.data.id}`}
+          renderItem={({ item }) => {
+            if (item.type === 'comment_repost') {
+              return (
+                <CommentCard
+                  comment={item.data}
+                  likedIds={likedCommentIds}
+                  repostedIds={repostedCommentIds}
+                  savedIds={savedCommentIds}
+                  onToggleLike={(id, result) => {
+                    setLikedCommentIds(prev => result.liked ? [...prev, id] : prev.filter(x => x !== id))
+                  }}
+                  onToggleRepost={(id, reposted) => {
+                    setRepostedCommentIds(prev => reposted ? [...prev, id] : prev.filter(x => x !== id))
+                  }}
+                  onToggleSave={(id, saved) => {
+                    setSavedCommentIds(prev => saved ? [...prev, id] : prev.filter(x => x !== id))
+                  }}
+                  onReplyAdded={() => {}}
+                  onProfilePress={(userId) => navigation.navigate('Profile', { userId })}
+                  onPostPress={(postId) => navigation.navigate('PostDetail', { postId })}
+                  onPress={(commentId) => navigation.navigate('CommentDetail', { commentId })}
+                  contextLabel={item.data.reposted_by ? `🔄 ${item.data.reposted_by.display_name} yeniden paylaştı` : undefined}
+                />
+              )
+            }
+            return (
+              <PostCard
+                post={item.data}
+                onPress={() => navigation.navigate('PostDetail', { postId: item.data.id })}
+                onProfilePress={(userId) => navigation.navigate('Profile', { userId })}
+              />
+            )
+          }}
           contentContainerStyle={{ paddingBottom: 80 }}
           showsVerticalScrollIndicator={false}
           refreshControl={

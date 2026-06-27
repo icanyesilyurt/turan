@@ -76,7 +76,17 @@ export default function PostDetailScreen({ route, navigation }: any) {
   }
 
   const handleReplyAdded = (reply: CommunityComment) => {
-    setAllComments(prev => [...prev, reply])
+    setAllComments(prev => {
+      const updated = [...prev, reply]
+      if (reply.parent_comment_id) {
+        return updated.map(cm =>
+          cm.id === reply.parent_comment_id
+            ? { ...cm, replies_count: cm.replies_count + 1 }
+            : cm,
+        )
+      }
+      return updated
+    })
   }
 
   const handleCommentDeleted = (commentId: string) => {

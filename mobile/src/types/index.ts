@@ -90,7 +90,12 @@ export interface CommunityComment {
   replies_count: number
   parent_comment_id?: string | null
   created_at: string
+  reposted_by?: { display_name: string; username: string }
 }
+
+export type FeedItem =
+  | { type: 'post'; data: CommunityPost; sortDate: string }
+  | { type: 'comment_repost'; data: CommunityComment; sortDate: string }
 
 export interface DirectMessage {
   id: string

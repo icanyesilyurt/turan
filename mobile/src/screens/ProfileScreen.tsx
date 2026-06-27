@@ -29,7 +29,7 @@ import {
 } from '../services/profileService'
 import { getProfileFeed } from '../services/postService'
 import { getUserComments, getUserCommentInteractions } from '../services/interactionService'
-import { Profile, User, CommunityComment } from '../types'
+import { Profile, User, CommunityComment, FeedItem } from '../types'
 import PostCard from '../components/PostCard'
 import CommentCard from '../components/CommentCard'
 import EditProfileModal from '../components/EditProfileModal'
@@ -147,7 +147,7 @@ export default function ProfileScreen({ route, navigation }: any) {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [followListVisible, setFollowListVisible] = useState(false)
   const [followListTab, setFollowListTab] = useState<'following' | 'followers'>('followers')
-  const [userPosts, setUserPosts] = useState<import('../types').CommunityPost[]>([])
+  const [userFeedItems, setUserFeedItems] = useState<FeedItem[]>([])
   const [userComments, setUserComments] = useState<CommunityComment[]>([])
   const [likedCommentIds, setLikedCommentIds] = useState<string[]>([])
   const [repostedCommentIds, setRepostedCommentIds] = useState<string[]>([])
@@ -356,7 +356,7 @@ export default function ProfileScreen({ route, navigation }: any) {
     if (!targetProfileId) return
     let active = true
     getProfileFeed(targetProfileId)
-      .then(data => { if (active) setUserPosts(data) })
+      .then(data => { if (active) setUserFeedItems(data) })
       .catch(() => {})
     getUserComments(targetProfileId)
       .then(data => { if (active) setUserComments(data) })
@@ -625,9 +625,9 @@ export default function ProfileScreen({ route, navigation }: any) {
 
   const renderTabContent = () => {
     if (activeTab === 'posts') {
-      return userPosts.length === 0
+      return userFeedItems.length === 0
         ? [{ id: '__empty_posts', _empty: true }]
-        : userPosts
+        : userFeedItems.map(item => ({ ...item, id: `${item.type}-${item.data.id}` }))
     }
     if (activeTab === 'comments') {
       return userComments.length === 0
@@ -663,10 +663,35 @@ export default function ProfileScreen({ route, navigation }: any) {
             )
           }
           if (activeTab === 'posts') {
+            if (item.type === 'comment_repost') {
+              return (
+                <CommentCard
+                  comment={item.data}
+                  likedIds={likedCommentIds}
+                  repostedIds={repostedCommentIds}
+                  savedIds={savedCommentIds}
+                  onToggleLike={(id, result) => {
+                    setLikedCommentIds(prev => result.liked ? [...prev, id] : prev.filter(x => x !== id))
+                  }}
+                  onToggleRepost={(id, reposted) => {
+                    setRepostedCommentIds(prev => reposted ? [...prev, id] : prev.filter(x => x !== id))
+                  }}
+                  onToggleSave={(id, saved) => {
+                    setSavedCommentIds(prev => saved ? [...prev, id] : prev.filter(x => x !== id))
+                  }}
+                  onReplyAdded={() => {}}
+                  onDeleted={(id) => setUserFeedItems(prev => prev.filter(fi => !(fi.type === 'comment_repost' && fi.data.id === id)))}
+                  onProfilePress={(uid) => navigation.push('Profile', { userId: uid })}
+                  onPostPress={(pid) => navigation.navigate('PostDetail', { postId: pid })}
+                  onPress={(commentId) => navigation.navigate('CommentDetail', { commentId })}
+                  contextLabel={item.data.reposted_by ? `🔄 ${item.data.reposted_by.display_name} yeniden paylaştı` : undefined}
+                />
+              )
+            }
             return (
               <PostCard
-                post={item}
-                onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+                post={item.data ?? item}
+                onPress={() => navigation.navigate('PostDetail', { postId: (item.data ?? item).id })}
                 onDeleted={() => {}}
                 onProfilePress={(uid) => navigation.push('Profile', { userId: uid })}
               />
