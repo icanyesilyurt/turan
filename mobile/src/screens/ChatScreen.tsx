@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from 'react-native'
+import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Keyboard } from 'react-native'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { colors, getTheme } from '../styles/theme'
@@ -21,6 +21,13 @@ export default function ChatScreen({ route, navigation }: any) {
   const [sending, setSending] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(initialConvId ?? null)
   const flatListRef = useRef<FlatList>(null)
+  const [keyboardVisible, setKeyboardVisible] = useState(false)
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true))
+    const hideSub = Keyboard.addListener('keyboardWillHide', () => setKeyboardVisible(false))
+    return () => { showSub.remove(); hideSub.remove() }
+  }, [])
 
   const displayName = otherUser?.display_name ?? ''
 
@@ -33,7 +40,7 @@ export default function ChatScreen({ route, navigation }: any) {
       const data = await getMessages(conversationId)
       setMessages(data)
       if (profile) {
-        markConversationRead(conversationId, profile.id).then(() => refreshUnreadDmCount())
+        markConversationRead(conversationId, profile.id).then(() => refreshUnreadDmCount()).catch(() => {})
       }
     } catch {}
     setLoading(false)
@@ -42,6 +49,17 @@ export default function ChatScreen({ route, navigation }: any) {
   useEffect(() => {
     loadMessages()
   }, [loadMessages])
+
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', () => {
+      if (conversationId && profile) {
+        markConversationRead(conversationId, profile.id)
+          .then(() => refreshUnreadDmCount())
+          .catch(() => {})
+      }
+    })
+    return unsub
+  }, [navigation, conversationId, profile?.id, refreshUnreadDmCount])
 
   useEffect(() => {
     if (!conversationId && !initialConvId && profile && otherUserId) {
@@ -114,6 +132,7 @@ export default function ChatScreen({ route, navigation }: any) {
       ) : (
         <FlatList
           ref={flatListRef}
+          style={{ flex: 1 }}
           data={messages}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
@@ -148,7 +167,7 @@ export default function ChatScreen({ route, navigation }: any) {
         />
       )}
 
-      <View style={[styles.inputBar, { backgroundColor: c.bgSecondary, borderTopColor: c.border }]}>
+      <View style={[styles.inputBar, { backgroundColor: c.bgSecondary, borderTopColor: c.border, paddingBottom: keyboardVisible ? 12 : 95 }]}>
         <TextInput
           style={[styles.input, { backgroundColor: c.bgInput, color: c.text }]}
           placeholder={t('messages_placeholder')}
@@ -178,7 +197,7 @@ const styles = StyleSheet.create({
   bubbleTheirs: { alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
   bubbleText: { fontSize: 15, lineHeight: 21 },
   bubbleTime: { fontSize: 11, marginTop: 4, alignSelf: 'flex-end' },
-  inputBar: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, gap: 10, borderTopWidth: 1, paddingBottom: 30 },
+  inputBar: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, gap: 10, borderTopWidth: 1, paddingBottom: 95 },
   input: { flex: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, maxHeight: 100 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 })

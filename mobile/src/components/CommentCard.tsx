@@ -252,12 +252,7 @@ export default function CommentCard({
         )}
       </View>
 
-      <View style={[styles.actions, { borderTopColor: c.border }]}>
-        <TouchableOpacity style={styles.action} onPress={handleLike}>
-          <Text style={{ color: isLiked ? colors.red : c.textMuted, fontSize: 13 }}>
-            {isLiked ? '❤' : '♡'} {likesCount}
-          </Text>
-        </TouchableOpacity>
+      <View style={styles.actions}>
         <TouchableOpacity
           style={styles.action}
           onPress={() => {
@@ -265,17 +260,21 @@ export default function CommentCard({
             onPress?.(comment.id)
           }}
         >
-          <Text style={{ color: c.textMuted, fontSize: 13 }}>
-            💬 {comment.replies_count}
-          </Text>
+          <Text style={[styles.actionIcon, { color: c.textMuted }]}>💬</Text>
+          <Text style={[styles.actionCount, { color: c.textMuted }]}>{comment.replies_count}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.action} onPress={handleRepost}>
-          <Text style={{ color: isReposted ? colors.teal : c.textMuted, fontSize: 13 }}>
-            🔄 {repostsCount}
+          <Text style={[styles.actionIcon, { color: isReposted ? colors.teal : c.textMuted }]}>🔄</Text>
+          <Text style={[styles.actionCount, { color: isReposted ? colors.teal : c.textMuted }]}>{repostsCount}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.action} onPress={handleLike}>
+          <Text style={[styles.actionIcon, { color: isLiked ? colors.teal : c.textMuted }]}>
+            {isLiked ? '❤' : '♡'}
           </Text>
+          <Text style={[styles.actionCount, { color: isLiked ? colors.teal : c.textMuted }]}>{likesCount}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.action} onPress={handleSave}>
-          <Text style={{ color: isSaved ? colors.teal : c.textMuted, fontSize: 13 }}>
+          <Text style={[styles.actionIcon, { color: isSaved ? colors.teal : c.textMuted }]}>
             {isSaved ? '🔖' : '☆'}
           </Text>
         </TouchableOpacity>
@@ -285,7 +284,7 @@ export default function CommentCard({
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, borderBottomWidth: 1 },
+  container: { padding: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   contextRow: { marginBottom: 8, paddingLeft: 56 },
   header: { flexDirection: 'row', gap: 12 },
   avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
@@ -297,6 +296,8 @@ const styles = StyleSheet.create({
   moreBtn: { paddingHorizontal: 4, paddingVertical: 2, alignSelf: 'flex-start' },
   text: { fontSize: 15, lineHeight: 23, marginTop: 10 },
   commentImage: { width: '100%', height: undefined, aspectRatio: 16 / 9, borderRadius: 12, marginTop: 10, borderWidth: 1 },
-  actions: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 12, paddingTop: 10, borderTopWidth: 0.5 },
-  action: { paddingVertical: 4, paddingHorizontal: 8 },
+  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 0, paddingHorizontal: 4 },
+  action: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, gap: 6, borderRadius: 20, minHeight: 36 },
+  actionIcon: { fontSize: 15 },
+  actionCount: { fontSize: 13 },
 })

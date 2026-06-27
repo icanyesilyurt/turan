@@ -8,16 +8,16 @@ export const colors = {
 }
 
 export const dark = {
-  bg: '#0f172a',
-  bgSecondary: '#1e293b',
-  bgCard: '#1e293b',
-  bgInput: '#334155',
-  bgHover: '#334155',
-  text: '#f1f5f9',
-  textSecondary: '#94a3b8',
-  textMuted: '#64748b',
-  border: '#334155',
-  borderLight: '#475569',
+  bg: '#000000',
+  bgSecondary: '#0a0a0a',
+  bgCard: '#0a0a0a',
+  bgInput: '#1a1a1a',
+  bgHover: '#1a1a1a',
+  text: '#e7e9ea',
+  textSecondary: '#8b98a5',
+  textMuted: '#536471',
+  border: '#1a1a1a',
+  borderLight: '#2f3336',
 }
 
 export const light = {

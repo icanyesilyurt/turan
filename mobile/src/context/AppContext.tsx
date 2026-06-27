@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppLanguage, Theme, User } from '../types'
 import translations from '../i18n/translations'
@@ -41,6 +41,10 @@ interface AppContextType {
   repostPost: (postId: string) => Promise<{ count: number }>
   unrepostPost: (postId: string) => Promise<{ count: number }>
   toggleSavePost: (postId: string) => Promise<{ saved: boolean }>
+  tabBarVisible: boolean
+  setTabBarVisible: (v: boolean) => void
+  fabVisible: boolean
+  setFabVisible: (v: boolean) => void
   drafts: Draft[]
   addDraft: (text: string) => void
   removeDraft: (id: string) => void
@@ -61,6 +65,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [unreadNotifCount, setUnreadNotifCount] = useState(0)
   const [unreadDmCount, setUnreadDmCount] = useState(0)
   const [postsVersion, setPostsVersion] = useState(0)
+  const [tabBarVisible, setTabBarVisibleState] = useState(true)
+  const tabBarVisibleRef = useRef(true)
+  const setTabBarVisible = useCallback((v: boolean) => {
+    if (tabBarVisibleRef.current !== v) {
+      tabBarVisibleRef.current = v
+      setTabBarVisibleState(v)
+    }
+  }, [])
+
+  const [fabVisible, setFabVisibleState] = useState(false)
+  const fabVisibleRef = useRef(false)
+  const setFabVisible = useCallback((v: boolean) => {
+    if (fabVisibleRef.current !== v) {
+      fabVisibleRef.current = v
+      setFabVisibleState(v)
+    }
+  }, [])
 
   const incrementPostsVersion = useCallback(() => setPostsVersion(v => v + 1), [])
 
@@ -218,6 +239,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshUnreadCount,
       unreadDmCount,
       refreshUnreadDmCount,
+      tabBarVisible,
+      setTabBarVisible,
+      fabVisible,
+      setFabVisible,
       savedPostIds, likedPostIds, repostedPostIds,
       toggleLikePost, repostPost, unrepostPost, toggleSavePost,
       drafts, addDraft, removeDraft,

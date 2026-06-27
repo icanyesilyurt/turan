@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert } from 'react-native'
+import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Alert, Keyboard } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
@@ -30,6 +30,13 @@ export default function PostDetailScreen({ route, navigation }: any) {
   const [repostedCommentIds, setRepostedCommentIds] = useState<string[]>([])
   const [savedCommentIds, setSavedCommentIds] = useState<string[]>([])
   const [mediaUri, setMediaUri] = useState<string | null>(null)
+  const [keyboardVisible, setKeyboardVisible] = useState(false)
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true))
+    const hideSub = Keyboard.addListener('keyboardWillHide', () => setKeyboardVisible(false))
+    return () => { showSub.remove(); hideSub.remove() }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -235,7 +242,7 @@ export default function PostDetailScreen({ route, navigation }: any) {
       </ScrollView>
 
       {canComment ? (
-        <View style={[styles.commentInputArea, { backgroundColor: c.bgSecondary, borderTopColor: c.border }]}>
+        <View style={[styles.commentInputArea, { backgroundColor: c.bgSecondary, borderTopColor: c.border, paddingBottom: keyboardVisible ? 12 : 95 }]}>
           {mediaUri && (
             <View style={styles.mediaPreviewRow}>
               <Image source={{ uri: mediaUri }} style={styles.mediaPreview} />
@@ -255,6 +262,9 @@ export default function PostDetailScreen({ route, navigation }: any) {
               value={commentText}
               onChangeText={setCommentText}
               editable={!sending}
+              multiline
+              maxLength={1000}
+              textAlignVertical="center"
             />
             <TouchableOpacity
               style={[styles.sendBtn, { backgroundColor: hasContent && !sending ? colors.teal : c.bgInput }]}
@@ -286,12 +296,12 @@ const styles = StyleSheet.create({
   header: { paddingTop: 54, paddingBottom: 14, paddingHorizontal: 16, borderBottomWidth: 1 },
   commentsSection: { paddingHorizontal: 16, paddingTop: 16 },
   commentsTitle: { fontSize: 17, fontWeight: '600', marginBottom: 4 },
-  commentInputArea: { borderTopWidth: 1, paddingBottom: 30 },
+  commentInputArea: { borderTopWidth: 1, paddingBottom: 95 },
   mediaPreviewRow: { paddingHorizontal: 12, paddingTop: 10 },
   mediaPreview: { width: 72, height: 72, borderRadius: 10 },
   mediaRemove: { position: 'absolute', top: 14, left: 60, width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-  commentInputRow: { flexDirection: 'row', alignItems: 'center', padding: 10, gap: 8 },
+  commentInputRow: { flexDirection: 'row', alignItems: 'flex-end', padding: 10, gap: 8 },
   addMediaBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  input: { flex: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15 },
+  input: { flex: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, maxHeight: 100 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 })

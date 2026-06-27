@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -130,7 +130,7 @@ function PhotoViewerModal({
 }
 
 export default function ProfileScreen({ route, navigation }: any) {
-  const { t, theme, user: currentUser, postsVersion } = useApp()
+  const { t, theme, user: currentUser, postsVersion, setFabVisible } = useApp()
   const { profile: currentProfile, requireAuth, refreshProfile } = useAuth()
   const c = getTheme(theme)
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts')
@@ -153,6 +153,12 @@ export default function ProfileScreen({ route, navigation }: any) {
   const [likedCommentIds, setLikedCommentIds] = useState<string[]>([])
   const [repostedCommentIds, setRepostedCommentIds] = useState<string[]>([])
   const [savedCommentIds, setSavedCommentIds] = useState<string[]>([])
+
+  useEffect(() => {
+    const unsubFocus = navigation.addListener('focus', () => setFabVisible(true))
+    const unsubBlur = navigation.addListener('blur', () => setFabVisible(false))
+    return () => { unsubFocus(); unsubBlur() }
+  }, [navigation, setFabVisible])
 
   const showPermissionAlert = (
     messageKey: 'camera_permission_message' | 'gallery_permission_message',
